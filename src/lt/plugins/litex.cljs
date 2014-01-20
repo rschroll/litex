@@ -42,7 +42,8 @@
                                         (:connection-command @this)
                                         (assoc (:info @this) :exit data
                                                              :output (:output @this)
-                                                             :imgdir (:imgdir @this))
+                                                             :imgdir (:imgdir @this)
+                                                             :editor (:editor @this))
                                         :only (:editor @this))))))
 
 (behavior ::run

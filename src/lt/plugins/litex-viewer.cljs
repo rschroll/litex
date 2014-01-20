@@ -413,7 +413,8 @@
                                     (object/raise (:frame @this) :set-zoom!)
                                     (set! (.-scrollTop pdf-viewer) scroll-top)   ;; Not
                                     (set! (.-scrollLeft pdf-viewer) scroll-left) ;; working
-                                    (object/raise (:frame @this) :hide-log!))
+                                    (object/raise (:frame @this) :hide-log!)
+                                    (object/raise (:editor data) :sync-forward))
                                   (object/raise (:frame @this) :show-log!))
                                 (set! (.-innerText log-viewer) (:output data))
                                 (set! (.-scrollTop log-viewer) (- (.-scrollHeight log-viewer) (.-clientHeight log-viewer))))))
