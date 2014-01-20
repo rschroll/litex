@@ -424,7 +424,7 @@
                       (let [data (:data msg)
                             pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
                             sync-box (dom/$ :div#sync-box (object/->content this))
-                            output-split (and data (rest (.split (:output data) "\nOutput")))]
+                            output-split (and (:output data) (rest (.split (:output data) "\nOutput")))]
                         (if output-split  ;; locs is lazy?
                           (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpair (.split % "\n"))))) output-split)
                                 zoom (:zoom @(:frame @this))
@@ -466,7 +466,7 @@
                                                :height (str (- bbbottom bbtop) "px")})
                             (dom/add-class sync-box :animate))
                                                ;:-webkit-animation-play-state "running"}))
-                          (js/console.log "No link!")))))
+                          (js/console.log "No synctex results!")))))
 
 (defn pdf-to-elem [elem loc]
   (let [{:keys [h v W H Page]} loc

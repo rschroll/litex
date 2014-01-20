@@ -126,7 +126,7 @@
                       (let [pos (ed/->cursor editor)]
                         (run-command :litex.forward-sync editor
                                      [["synctex" "view" "-i" [(+ (:line pos) 1) ":" (+ (:ch pos) 1) ":" :filename]
-                                       "-o" :basename] ["ls"]]))))  ;; extra command to ensure we catch output
+                                       "-o" :basename] ["sleep" "0.1s"]]))))  ;; extra command to ensure we catch output
 
 (object/object* ::tex-lang
                 :tags #{:tex.lang}
