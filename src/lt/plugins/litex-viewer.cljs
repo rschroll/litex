@@ -133,6 +133,8 @@
                 :urlvalue "about:blank"
                 :zoom 1
                 :zoom-factor 1.25
+                :restore-top nil
+                :restore-left nil
                 :behaviors [::destroy-on-close
                             ::rem-client
                             ::zoom-in!
@@ -411,8 +413,7 @@
                                     (doseq [f (files/ls imgdir)]
                                       (dom/before sync-box (crate/html [:img {:src (str "file://" (files/join imgdir f))}])))
                                     (object/raise (:frame @this) :set-zoom!)
-                                    (set! (.-scrollTop pdf-viewer) scroll-top)   ;; Not
-                                    (set! (.-scrollLeft pdf-viewer) scroll-left) ;; working
+                                    (object/merge! (:frame @this) {:restore-top scroll-top :restore-left scroll-left})
                                     (object/raise (:frame @this) :hide-log!)
                                     (object/raise (:editor data) :sync-forward))
                                   (object/raise (:frame @this) :show-log!))
@@ -425,7 +426,10 @@
                       (let [data (:data msg)
                             pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
                             sync-box (dom/$ :div#sync-box (object/->content this))
-                            output-split (and (:output data) (rest (.split (:output data) "\nOutput")))]
+                            output-split (and (:output data) (rest (.split (:output data) "\nOutput")))
+                            restore-top (:restore-top @(:frame @this))
+                            restore-left (:restore-left @(:frame @this))]
+                        (object/merge! (:frame @this) {:restore-top nil :restore-left nil})
                         (if output-split  ;; locs is lazy?
                           (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpair (.split % "\n"))))) output-split)
                                 zoom (:zoom @(:frame @this))
@@ -436,10 +440,10 @@
                                 bbbottom (apply max (map :v locs))
                                 bbwidth (- bbright bbleft)
                                 bbheight (- bbbottom bbtop)
-                                vleft (.-scrollLeft pdf-viewer)
+                                vleft (or restore-left (.-scrollLeft pdf-viewer))
                                 vwidth (.-clientWidth pdf-viewer)
                                 vright (+ vleft vwidth)
-                                vtop (.-scrollTop pdf-viewer)
+                                vtop (or restore-top (.-scrollTop pdf-viewer))
                                 vheight (.-clientHeight pdf-viewer)
                                 vbottom (+ vtop vheight)]
                             (dom/remove-class sync-box :animate)
