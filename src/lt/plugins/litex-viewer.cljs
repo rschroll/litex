@@ -468,8 +468,6 @@
                                                ;:-webkit-animation-play-state "running"}))
                           (js/console.log "No link!")))))
 
-(nth [1 2 3 4 5] 4)
-
 (defn pdf-to-elem [elem loc]
   (let [{:keys [h v W H Page]} loc
         img (nth (dom/children elem) (- Page 1))
@@ -478,8 +476,6 @@
      :v (+ (* v scale) (.-offsetTop img) 2)   ;; measures to outside of border
      :W (* W scale)
      :H (* H scale)}))
-
-(pdf-to-elem nil {:h 10 :v 20 :W 30 :H 40})
 
 (defn kwpair [str]
   (let [[k v] (.split str ":")]
