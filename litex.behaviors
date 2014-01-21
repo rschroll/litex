@@ -1,5 +1,4 @@
 {:+ {:app [(:lt.objs.plugins/load-js "litex_compiled.js")]
-     :editor.latex [:lt.plugins.litex/eval-on-save :lt.plugins.litex/on-eval :lt.plugins.litex/sync-forward] ;(:lt.objs.editor/tab-settings false 4 4)]
-     ;:files [(:lt.objs.files/file-types [{:name "TeX" :exts [:tex] :mime "application/x-tex" :tags [:editor.tex]}])]
+     :editor.latex [:lt.plugins.litex/eval-on-save :lt.plugins.litex/on-eval :lt.plugins.litex/sync-forward]
      :latex.lang [:lt.plugins.litex/eval!]
      }}

@@ -4,17 +4,10 @@
             [lt.objs.command :as cmd]
             [lt.objs.console :as console]
             [lt.objs.files :as files]
-            [lt.objs.eval :as eval]
             [lt.objs.clients :as clients]
-            [lt.objs.sidebar.clients :as scl]
-            [lt.objs.menu :as menu]
-            [lt.objs.platform :as platform]
             [lt.objs.context :as ctx]
             [lt.objs.editor :as editor]
             [lt.objs.editor.pool :as pool]
-            [lt.objs.keyboard :as keyboard]
-            [lt.objs.notifos :as notifos]
-            [lt.objs.clients.devtools :as devtools]
             [lt.objs.proc :as proc]
             [lt.util.dom :as dom]
             [clojure.string :as string]
@@ -25,47 +18,8 @@
 (def utils (js-obj))
 (set! js/lttools utils)
 
-(def no-history-sites #{"data:text/html,chromewebdata"})
-
-(defn check-http [url]
-  (if (and (= (.indexOf url "http") -1)
-           (= (.indexOf url "file://") -1))
-    (str "http://" url)
-    url))
-
 (defn add-util [nme fn]
   (aset utils (name nme) fn))
-
-(defui url-bar [this]
-  [:input.url-bar {:type "text" :placeholder "url" :value (bound this :urlvalue)}]
-  :focus (fn []
-           (ctx/in! :browser.url-bar this)
-           (object/raise this :active))
-  :blur (fn []
-          (object/raise this :inactive)
-          (ctx/out! :browser.url-bar)))
-
-(defui backward [this]
-  [:button {:value "<"} "<"]
-  :click (fn []
-           (object/raise this :back!)))
-
-(defui forward [this]
-  [:button {:value ">"} ">"]
-  :click (fn []
-           (object/raise this :forward!)))
-
-(defui refresh [this]
-  [:button {:value "re"} "↺"]
-  :click (fn []
-           (object/raise this :refresh!)))
-
-(defui iframe [this]
-  [:iframe {:src (bound (subatom this :url)) :id (browser-id this) :nwfaketop "true" :nwdisable "true"}]
-  :focus (fn []
-           (object/raise this :active))
-  :blur (fn []
-          (object/raise this :inactive)))
 
 (defui zoom-in [this]
   [:button {:value "zoom-in"} "⊕"]
@@ -179,9 +133,6 @@
                             ::show-log!
                             ::hide-log!
                             ::image-click!
-                            ::window-load-click-handler
-                            ::window-load-handler
-                            ::window-load-lttools
                             ::init!
                             ::set-client-name
                             ::set-active
@@ -349,73 +300,17 @@
                                       :cwd cwd
                                       :obj (object/create ::synctex-proc cwd)})))))
 
-(behavior ::window-load-click-handler
-                  :triggers #{:window.loaded}
-                  :reaction (fn [this window loc]
-                              (.document.addEventListener window "blur"
-                                                          (fn [e]
-                                                            (object/raise this :inactive e)))
-                              (.document.addEventListener window "contextmenu"
-                                                          (fn [e]
-                                                            (object/raise this :menu! e)))
-                              (.document.addEventListener window "click"
-                                                          (fn [e]
-                                                            (object/raise this :active)
-                                                            (when (and
-                                                                   (= (.-target.nodeName e) "A")
-                                                                   (or (and (platform/mac?) (.-metaKey e))
-                                                                       (.-ctrlKey e)))
-                                                              (.preventDefault e)
-                                                              (.stopPropagation e)
-                                                              (cmd/exec! :add-browser-tab (.-target.href e))))
-                                                          )))
-
-(behavior ::window-load-key-handler
-                  :triggers #{:window.loaded}
-                  :reaction (fn [this window loc]
-                              (let [script (.document.createElement window "script")]
-                                (set! (.-type script) "text/javascript")
-                                (set! (.-innerHTML script) (:content (files/open-sync "core/node_modules/lighttable/util/keyevents.js")))
-                                (.document.head.appendChild window script)
-                                (aset (aget window "Mousetrap") "handleKey"
-                                      (fn [key char e]
-                                        (when (keyboard/capture key char e)
-                                          (dom/prevent e)
-                                          (dom/stop-propagation e))))
-                                )))
-
-(behavior ::window-load-lttools
-                  :triggers #{:window.loaded}
-                  :reaction (fn [this window loc]
-                              (set! (.-lttools window) utils)))
-
 (behavior ::init!
                   :triggers #{:init}
                   :reaction (fn [this]
                               nil))
-;;                               (let [frame (dom/$ :iframe (object/->content this))
-;;                                     bar (dom/$ :input (object/->content this))]
-;;                                 (set! (.-onload frame) (fn []
-;;                                                          (let [loc (.-contentWindow.location.href frame)]
-;;                                                            (object/raise this :window.loaded (.-contentWindow frame) loc)
-;;                                                            (set! (.-contentWindow.onhashchange frame) (fn []
-;;                                                                                                         (dom/val bar (.-contentWindow.location.href frame))))
-;;                                                            (devtools/clear-scripts!)
-;;                                                            (dom/val bar loc)
-;;                                                            (object/raise this :navigate loc)))))))
 
 (behavior ::set-client-name
-                  :triggers #{:navigate}
-                  :reaction (fn [this loc]
-                              (let [title (.-document.title (to-frame this))
-                                    title (if-not (empty? title)
-                                            title
-                                            "browser")]
-                                (object/merge! this {:name title})
-                                (tabs/refresh! this)
-                                (dotimes [x (:loading-counter @this)]
-                                  (notifos/done-working))
-                                (object/merge! (:client @this) {:name loc}))))
+          :triggers #{:set-name}
+          :reaction (fn [this title]
+                      (object/merge! this {:name title})
+                      (tabs/refresh! this)
+                      (object/merge! (:client @this) {:name loc})))
 
 (behavior ::set-active
                   :triggers #{:active :show}
@@ -470,6 +365,7 @@
                                     (object/merge! viewer {:restore-top scroll-top
                                                            :restore-left scroll-left
                                                            :pdfname (:pdfname data)})
+                                    (object/raise viewer :set-name (files/basename (:pdfname data)))
                                     (object/raise viewer :hide-log!)
                                     (object/raise (:editor data) :sync-forward))
                                   (object/raise viewer :show-log!))
@@ -526,7 +422,6 @@
                                                :width (str (- bbright bbleft) "px")
                                                :height (str (- bbbottom bbtop) "px")})
                             (dom/add-class sync-box :animate))
-                                               ;:-webkit-animation-play-state "running"}))
                           (js/console.log "No synctex results!")))))
 
 (defn pdf-to-elem [elem loc]
