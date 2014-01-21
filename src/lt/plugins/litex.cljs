@@ -43,7 +43,8 @@
                                         (assoc (:info @this) :exit data
                                                              :output (:output @this)
                                                              :imgdir (:imgdir @this)
-                                                             :editor (:editor @this))
+                                                             :editor (:editor @this)
+                                                             :pdfname (:pdfname @this))
                                         :only (:editor @this))))))
 
 (behavior ::run
@@ -60,13 +61,14 @@
 (object/object* ::connecting-notifier
                 :triggers []
                 :behaviors [::on-out ::on-error ::on-exit ::run]
-                :init (fn [this editor info commands connection-command cwd imgdir]
+                :init (fn [this editor info commands connection-command cwd imgdir pdfname]
                         (object/merge! this {:editor editor
                                              :info info
                                              :commands commands
                                              :connection-command connection-command
                                              :cwd cwd
-                                             :imgdir imgdir})
+                                             :imgdir imgdir
+                                             :pdfname pdfname})
                         nil))
 
 (defn run-command [connection-command editor commands]
@@ -79,11 +81,12 @@
                  :ext      (files/ext path)
                  :randstr  (.toString (rand-int 1679616) 36)}
         imgdir (str (:dirname pathmap) "/.img." (:filename pathmap))
+        pdfname (str (files/join (:dirname pathmap) (:basename pathmap)) ".pdf")
         obj (object/create ::connecting-notifier editor info
                                                  (clojure.walk/prewalk-replace pathmap commands)
                                                  connection-command
                                                  (files/parent path)
-                                                 imgdir)]
+                                                 imgdir pdfname)]
     (eval/get-client! {:command connection-command
                        :origin editor
                        :create (fn [] (start-browser path))

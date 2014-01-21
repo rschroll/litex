@@ -15,6 +15,7 @@
             [lt.objs.keyboard :as keyboard]
             [lt.objs.notifos :as notifos]
             [lt.objs.clients.devtools :as devtools]
+            [lt.objs.proc :as proc]
             [lt.util.dom :as dom]
             [clojure.string :as string]
             [crate.core :as crate]
@@ -86,6 +87,19 @@
   :click (fn []
            (object/raise this :hide-log!)))
 
+(defui pdfimg [viewer src]
+  [:img {:src src}]
+  :click (fn [event]
+           (object/raise viewer :image-click! event)))
+
+(defn kwpair [str]
+  (let [[k v] (.split str ":")]
+    (if v [(keyword k) v] nil)))
+
+(defn kwpairf [str]
+  (let [[k v] (.split str ":")]
+    (if v [(keyword k) (js/parseFloat v)] nil)))
+
 (defn browser-id [this]
   (str "browser" (object/->id this)))
 
@@ -97,6 +111,28 @@
 
 (defn handle-cb [cbid command data]
   (object/raise clients/clients :message [cbid command data]))
+
+
+(object/object* ::synctex-proc
+                :behaviors [::on-out ::on-error]
+                :init (fn [this cwd]
+                        (object/merge! this {:cwd cwd})
+                        nil))
+
+(behavior ::on-out
+          :triggers #{:proc.out}
+          :reaction (fn [this data]
+                      (let [loc (into {} (remove nil? (map kwpair (.split (.toString data) "\n"))))
+                            filename (files/join (:cwd @this) (:Input loc))
+                            line (- (:Line loc) 1)
+                            column (- (:Column loc) 1)]
+                        (cmd/exec! :open-path filename)
+                        (editor/move-cursor (first (pool/by-path filename)) {:line line :ch (max column 0)}))))
+
+(behavior ::on-error
+          :triggers #{:proc.error}
+          :reaction (fn [this data]
+                      (js/console.log (str "Synctex error: " (.toString data)))))
 
 
 (defn connect-client [this]
@@ -142,6 +178,7 @@
                             ::set-zoom!
                             ::show-log!
                             ::hide-log!
+                            ::image-click!
                             ::window-load-click-handler
                             ::window-load-handler
                             ::window-load-lttools
@@ -296,6 +333,22 @@
           :reaction (fn [this]
                       (dom/add-class (object/->content this) "hide-log")))
 
+(behavior ::image-click!
+          :triggers #{:image-click!}
+          :reaction (fn [this event]
+                      (if (.-ctrlKey event)
+                        (let [zoom (:zoom @this)
+                              scale (/ 150 72)
+                              clickX (/ (- (/ (js/parseFloat (.-offsetX event)) zoom) 2) scale)
+                              clickY (/ (- (/ (js/parseFloat (.-offsetY event)) zoom) 2) scale)
+                              pagenum (js/parseInt (last (.split (-> event .-srcElement .-src) "-")))
+                              cwd (files/parent (:pdfname @this))
+                              pdfname (files/basename (:pdfname @this))]
+                          (proc/exec {:command "synctex"
+                                      :args ["edit" "-o" (str pagenum ":" clickX ":" clickY ":" pdfname)]
+                                      :cwd cwd
+                                      :obj (object/create ::synctex-proc cwd)})))))
+
 (behavior ::window-load-click-handler
                   :triggers #{:window.loaded}
                   :reaction (fn [this window loc]
@@ -405,18 +458,21 @@
                                     sync-box   (dom/$ :div#sync-box   (object/->content this))
                                     log-viewer (dom/$ :pre#log-viewer (object/->content this))
                                     scroll-top (.-scrollTop pdf-viewer)
-                                    scroll-left (.-scrollLeft pdf-viewer)]
+                                    scroll-left (.-scrollLeft pdf-viewer)
+                                    viewer (:frame @this)]
                                 (if (= 0 (:exit data))
                                   (do
                                     (while (not (= sync-box (first (dom/children pdf-viewer))))
                                       (dom/remove (first (dom/children pdf-viewer))))
                                     (doseq [f (files/ls imgdir)]
-                                      (dom/before sync-box (crate/html [:img {:src (str "file://" (files/join imgdir f))}])))
-                                    (object/raise (:frame @this) :set-zoom!)
-                                    (object/merge! (:frame @this) {:restore-top scroll-top :restore-left scroll-left})
-                                    (object/raise (:frame @this) :hide-log!)
+                                      (dom/before sync-box (pdfimg viewer (str "file://" (files/join imgdir f)))))
+                                    (object/raise viewer :set-zoom!)
+                                    (object/merge! viewer {:restore-top scroll-top
+                                                           :restore-left scroll-left
+                                                           :pdfname (:pdfname data)})
+                                    (object/raise viewer :hide-log!)
                                     (object/raise (:editor data) :sync-forward))
-                                  (object/raise (:frame @this) :show-log!))
+                                  (object/raise viewer :show-log!))
                                 (set! (.-innerText log-viewer) (:output data))
                                 (set! (.-scrollTop log-viewer) (- (.-scrollHeight log-viewer) (.-clientHeight log-viewer))))))
 
@@ -431,7 +487,7 @@
                             restore-left (:restore-left @(:frame @this))]
                         (object/merge! (:frame @this) {:restore-top nil :restore-left nil})
                         (if output-split  ;; locs is lazy?
-                          (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpair (.split % "\n"))))) output-split)
+                          (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
                                 zoom (:zoom @(:frame @this))
                                 ;; Need to find bounding box including all boxes in locs
                                 bbleft (apply min (map :h locs))
@@ -481,10 +537,6 @@
      :v (+ (* v scale) (.-offsetTop img) 2)   ;; measures to outside of border
      :W (* W scale)
      :H (* H scale)}))
-
-(defn kwpair [str]
-  (let [[k v] (.split str ":")]
-    (if v [(keyword k) (js/parseFloat v)] nil)))
 
 (cmd/command {:command :add-litex-viewer-tab
               :desc "LiTeX: add viewer tab"
