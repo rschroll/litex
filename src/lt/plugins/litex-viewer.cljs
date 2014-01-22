@@ -361,7 +361,7 @@
                                     scroll-top (.-scrollTop pdf-viewer)
                                     scroll-left (.-scrollLeft pdf-viewer)
                                     viewer (:frame @this)]
-                                (if (= 0 (:exit data))
+                                (if-not (:error data)
                                   (do
                                     (while (not (= sync-box (first (dom/children pdf-viewer))))
                                       (dom/remove (first (dom/children pdf-viewer))))
@@ -375,7 +375,7 @@
                                     (object/raise viewer :hide-log!)
                                     (object/raise (:editor data) :sync-forward))
                                   (object/raise viewer :show-log!))
-                                (set! (.-innerText log-viewer) (:output data))
+                                (set! (.-innerText log-viewer) (str (:stdout data) (:stderr data)))
                                 (set! (.-scrollTop log-viewer) (- (.-scrollHeight log-viewer) (.-clientHeight log-viewer))))))
 
 (behavior ::forward-sync
@@ -384,7 +384,7 @@
                       (let [data (:data msg)
                             pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
                             sync-box (dom/$ :div#sync-box (object/->content this))
-                            output-split (and (:output data) (rest (.split (:output data) "\nOutput")))
+                            output-split (and (:stdout data) (rest (.split (:stdout data) "\nOutput")))
                             restore-top (:restore-top @(:frame @this))
                             restore-left (:restore-left @(:frame @this))]
                         (object/merge! (:frame @this) {:restore-top nil :restore-left nil})

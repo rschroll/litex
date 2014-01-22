@@ -16,81 +16,48 @@
             [lt.util.js :refer [wait]])
   (:require-macros [lt.macros :refer [behavior defui]]))
 
+(def _exec (.-exec (js/require "child_process")))
+(defn exec [command cwd exitfunc]
+  (_exec command (js-obj "cwd" cwd
+                         "env" (proc/merge-env nil)
+                         "windowsVerbatimArguments" (when (= js/process.platform "win32") true))
+         exitfunc))
+
 (defn start-browser [path]
   (cmd/exec! :add-litex-viewer-tab (str "file://" path)))
 
-(behavior ::on-out
-          :triggers #{:proc.out}
-          :reaction (fn [this data]
-                      (object/merge! this {:output (str (:output @this) data)})))
-
-(behavior ::on-error
-          :triggers #{:proc.error}
-          :reaction (fn [this data]
-                      (notifos/done-working)
-                      ((:errfunc @this) (.toString data))))
-
-(behavior ::on-exit
-          :triggers #{:proc.exit}
-          :reaction (fn [this code]
-                      (if (and (= code 0) (not (empty? (:commands @this))))
-                        (object/raise this :run)
-                        (do
-                          (notifos/done-working)
-                          ;; Be sure to get output:
-                          (wait 100 #(object/raise this :done code))))))
-
-(behavior ::done
-          :triggers #{:done}
-          :reaction (fn [this code]
-                      ((:exitfunc @this) code (:output @this))))
-
-(behavior ::run
-          :triggers #{:run}
-          :reaction (fn [this]
-                      (let [command (first (:commands @this))
-                            commands (rest (:commands @this))]
-                        (object/merge! this {:commands commands})
-                        (proc/exec {:command (apply str (first command))
-                                    :args (map #(apply str %) (rest command))
-                                    :cwd (:cwd @this)
-                                    :obj this}))))
-
-(object/object* ::command-runner
-                :triggers []
-                :behaviors [::on-out ::on-error ::on-exit ::done ::run]
-                :init (fn [this commands cwd exitfunc errfunc]
-                        (object/merge! this {:commands commands
-                                             :cwd cwd
-                                             :exitfunc exitfunc
-                                             :errfunc errfunc})
-                        nil))
-
-(defn run-commands [commands cwd exitfunc errfunc]
-  (let [errfunc (or errfunc (fn [msg] (js/console.log (str "Process error: " msg))))
-        exitfunc  (or exitfunc (fn [code output] (js/console.log (str "Process exited with code " code ":\n" output))))
-        runner (object/create ::command-runner commands cwd exitfunc errfunc)]
-    (notifos/working)
-    (object/raise runner :run)))
+(defn run-commands [commands cwd exitfunc & {:keys [accout] :or {accout ""}}]
+  (if (empty? commands)
+    (exitfunc nil accout "")
+    (let [command (first commands)
+          commands (rest commands)]
+      (exec command cwd (fn [error stdout stderr]
+                          (let [stdout (str accout stdout)]
+                            (if error
+                              (exitfunc error stdout stderr)
+                              (run-commands commands cwd exitfunc :accout stdout))))))))
 
 (defn run-commands-to-client [connection-command editor commands]
   (let [info (-> @editor :info)
         path (-> @editor :info :path)
-        pathmap {:filename (files/basename path)
-                 :fullname path
-                 :basename (files/without-ext (files/basename path))
-                 :dirname  (files/parent path)
-                 :ext      (files/ext path)
-                 :randstr  (.toString (rand-int 1679616) 36)}
-        imgdir (str (:dirname pathmap) "/.img." (:filename pathmap))
-        pdfname (str (files/join (:dirname pathmap) (:basename pathmap)) ".pdf")
-        exitfunc (fn [code output]
+        pathmap (fn [s]
+                  (clojure/string.replace s #"%[fpbder%]"
+                                          #((keyword %1) {:%f (files/basename path)
+                                                          :%p path
+                                                          :%b (files/without-ext (files/basename path))
+                                                          :%d (files/parent path)
+                                                          :%e (files/ext path)
+                                                          :%r (.toString (rand-int 1679616) 36)})))
+        imgdir (str (pathmap "%d") "/.img." (pathmap "%f"))
+        pdfname (str (files/join (pathmap "%d") (pathmap "%b")) ".pdf")
+        exitfunc (fn [error stdout stderr]
                    (clients/send (eval/get-client! {:command connection-command
                                                     :origin editor
                                                     :info info})
                                  connection-command
-                                 (assoc info :exit code
-                                             :output output
+                                 (assoc info :error error
+                                             :stdout stdout
+                                             :stderr stderr
                                              :imgdir imgdir
                                              :editor editor
                                              :pdfname pdfname)
@@ -106,14 +73,13 @@
         (if (files/exists? imgdir)
           (files/delete! imgdir))
         (files/mkdir imgdir)))
-    (run-commands (clojure.walk/prewalk-replace pathmap commands) (files/parent path) exitfunc nil)))
+    (run-commands (map pathmap commands) (files/parent path) exitfunc)))
 
-
-(def pdflatex-commands [["pdflatex" "-halt-on-error" "--synctex=1" :filename]])
-(def dvilatex-commands [["latex" "-halt-on-error" "--synctex=1" :filename]
-                        ["dvipdf" :basename]])
+(def pdflatex-commands ["pdflatex -halt-on-error --synctex=1 \"%f\""])
+(def dvilatex-commands ["latex -halt-on-error --synctex=1 \"%f\""
+                        "dvipdf \"%b\""])
 (def pdflatex-preview (conj pdflatex-commands
-                            ["pdftoppm" "-png" [:basename ".pdf"] [".img." :filename "/" :randstr]]))
+                            "pdftoppm -png \"%b.pdf\" \".img.%f/%r\""))
 
 (behavior ::on-eval
           :triggers #{:eval
@@ -137,8 +103,7 @@
           :reaction (fn [editor]
                       (let [pos (ed/->cursor editor)]
                         (run-commands-to-client :litex.forward-sync editor
-                                     [["synctex" "view" "-i" [(+ (:line pos) 1) ":" (+ (:ch pos) 1) ":" :filename]
-                                       "-o" :basename]]))))
+                                     [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":%f\" -o \"%b\"")]))))
 
 (object/object* ::tex-lang
                 :tags #{:tex.lang}
