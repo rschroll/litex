@@ -3,7 +3,7 @@
   "author": "Robert Schroll",
   "version": "0.0.1",
   "source": "https://github.com/rschroll/litex",
-  "desc": "(La)TeX compilation for Light Table",
+  "desc": "LaTeX compilation, previewing, and syncing",
   "dependencies": {},
   "behaviors": "litex.behaviors"
 }
