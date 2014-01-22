@@ -440,7 +440,7 @@
      :H (* H scale)}))
 
 (cmd/command {:command :add-litex-viewer-tab
-              :desc "LiTeX: add viewer tab"
+              :desc "LiTeX: Add PDF viewer for LaTeX document"
               :exec (fn [loc]
                       (let [b (add)]
                         (if-not loc

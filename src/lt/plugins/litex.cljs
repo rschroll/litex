@@ -144,7 +144,7 @@
 (def tex-lang (object/create ::tex-lang))
 
 (cmd/command {:command :litex-forward-sync
-              :desc "LiTeX: forward sync"
+              :desc "LiTeX: Forward sync from LaTeX to PDF"
               :exec (fn []
                       (when-let [ed (pool/last-active)]
                         (object/raise ed :sync-forward)))})
