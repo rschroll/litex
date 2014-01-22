@@ -12,7 +12,8 @@
             [lt.objs.files :as files]
             [lt.objs.proc :as proc]
             [lt.objs.notifos :as notifos]
-            [lt.util.dom :refer [$ append]])
+            [lt.util.dom :refer [$ append]]
+            [lt.util.js :refer [wait]])
   (:require-macros [lt.macros :refer [behavior defui]]))
 
 (defn start-browser [path]
@@ -21,35 +22,28 @@
 (behavior ::on-out
           :triggers #{:proc.out}
           :reaction (fn [this data]
-                      (let [out (.toString data)]
-                        ;(js/console.log out)
-                        (object/merge! this
-                                       {:output (str (:output @this) out)}))))
+                      (object/merge! this {:output (str (:output @this) data)})))
 
 (behavior ::on-error
           :triggers #{:proc.error}
           :reaction (fn [this data]
                       (notifos/done-working)
-                      (let [out (.toString data)]
-                        (js/console.log (str "Proc error: " out)))))
+                      ((:errfunc @this) (.toString data))))
 
 (behavior ::on-exit
           :triggers #{:proc.exit}
-          :reaction (fn [this data]
-                      (if (and (= data 0) (not (empty? (:commands @this))))
+          :reaction (fn [this code]
+                      (if (and (= code 0) (not (empty? (:commands @this))))
                         (object/raise this :run)
                         (do
                           (notifos/done-working)
-                          (clients/send (eval/get-client! {:command (:connection-command @this)
-                                                           :origin (:editor @this)
-                                                           :info (:info @this)})
-                                        (:connection-command @this)
-                                        (assoc (:info @this) :exit data
-                                                             :output (:output @this)
-                                                             :imgdir (:imgdir @this)
-                                                             :editor (:editor @this)
-                                                             :pdfname (:pdfname @this))
-                                        :only (:editor @this))))))
+                          ;; Be sure to get output:
+                          (wait 100 #(object/raise this :done code))))))
+
+(behavior ::done
+          :triggers #{:done}
+          :reaction (fn [this code]
+                      ((:exitfunc @this) code (:output @this))))
 
 (behavior ::run
           :triggers #{:run}
@@ -62,20 +56,24 @@
                                     :cwd (:cwd @this)
                                     :obj this}))))
 
-(object/object* ::connecting-notifier
+(object/object* ::command-runner
                 :triggers []
-                :behaviors [::on-out ::on-error ::on-exit ::run]
-                :init (fn [this editor info commands connection-command cwd imgdir pdfname]
-                        (object/merge! this {:editor editor
-                                             :info info
-                                             :commands commands
-                                             :connection-command connection-command
+                :behaviors [::on-out ::on-error ::on-exit ::done ::run]
+                :init (fn [this commands cwd exitfunc errfunc]
+                        (object/merge! this {:commands commands
                                              :cwd cwd
-                                             :imgdir imgdir
-                                             :pdfname pdfname})
+                                             :exitfunc exitfunc
+                                             :errfunc errfunc})
                         nil))
 
-(defn run-command [connection-command editor commands]
+(defn run-commands [commands cwd exitfunc errfunc]
+  (let [errfunc (or errfunc (fn [msg] (js/console.log (str "Process error: " msg))))
+        exitfunc  (or exitfunc (fn [code output] (js/console.log (str "Process exited with code " code ":\n" output))))
+        runner (object/create ::command-runner commands cwd exitfunc errfunc)]
+    (notifos/working)
+    (object/raise runner :run)))
+
+(defn run-commands-to-client [connection-command editor commands]
   (let [info (-> @editor :info)
         path (-> @editor :info :path)
         pathmap {:filename (files/basename path)
@@ -86,11 +84,17 @@
                  :randstr  (.toString (rand-int 1679616) 36)}
         imgdir (str (:dirname pathmap) "/.img." (:filename pathmap))
         pdfname (str (files/join (:dirname pathmap) (:basename pathmap)) ".pdf")
-        obj (object/create ::connecting-notifier editor info
-                                                 (clojure.walk/prewalk-replace pathmap commands)
-                                                 connection-command
-                                                 (files/parent path)
-                                                 imgdir pdfname)]
+        exitfunc (fn [code output]
+                   (clients/send (eval/get-client! {:command connection-command
+                                                    :origin editor
+                                                    :info info})
+                                 connection-command
+                                 (assoc info :exit code
+                                             :output output
+                                             :imgdir imgdir
+                                             :editor editor
+                                             :pdfname pdfname)
+                                 :only editor))]
     (eval/get-client! {:command connection-command
                        :origin editor
                        :create (fn [] (start-browser path))
@@ -102,8 +106,8 @@
         (if (files/exists? imgdir)
           (files/delete! imgdir))
         (files/mkdir imgdir)))
-    (notifos/working "TeXing...")
-    (object/raise obj :run)))
+    (run-commands (clojure.walk/prewalk-replace pathmap commands) (files/parent path) exitfunc nil)))
+
 
 (def pdflatex-commands [["pdflatex" "-halt-on-error" "--synctex=1" :filename]])
 (def dvilatex-commands [["latex" "-halt-on-error" "--synctex=1" :filename]
@@ -126,15 +130,15 @@
           :triggers #{:eval!}
           :reaction (fn [this event]
                       (let [{:keys [info origin]} event]
-                        (run-command :editor.eval.tex origin pdflatex-preview))))
+                        (run-commands-to-client :editor.eval.tex origin pdflatex-preview))))
 
 (behavior ::sync-forward
           :triggers #{:sync-forward}
           :reaction (fn [editor]
                       (let [pos (ed/->cursor editor)]
-                        (run-command :litex.forward-sync editor
+                        (run-commands-to-client :litex.forward-sync editor
                                      [["synctex" "view" "-i" [(+ (:line pos) 1) ":" (+ (:ch pos) 1) ":" :filename]
-                                       "-o" :basename] ["sleep" "0.1s"]]))))  ;; extra command to ensure we catch output
+                                       "-o" :basename]]))))
 
 (object/object* ::tex-lang
                 :tags #{:tex.lang}
