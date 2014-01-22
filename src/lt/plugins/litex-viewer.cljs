@@ -1,3 +1,7 @@
+;; Copyright 2013 Kodowa INc and 2014 Robert Schroll
+;; This file is part of LiTeX ad is distributed under the terms of the GPLv3.
+;; This file derives from src/lt/objs/browser.cljs in Light Table.
+
 (ns lt.plugins.litex.viewer
   (:require [lt.object :as object]
             [lt.objs.tabs :as tabs]
