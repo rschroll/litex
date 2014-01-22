@@ -85,7 +85,9 @@
                             line (- (:Line loc) 1)
                             column (- (:Column loc) 1)]
                         (cmd/exec! :open-path filename)
-                        (editor/move-cursor (first (pool/by-path filename)) {:line line :ch (max column 0)}))))
+                        (if-let [ed (first (pool/by-path filename))]
+                          (editor/move-cursor ed {:line line :ch (max column 0)})
+                          (js/console.log (str "LiTeX could not find editor with " filename))))))
 
 (behavior ::on-error
           :triggers #{:proc.error}
