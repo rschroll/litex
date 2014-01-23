@@ -48,7 +48,9 @@
 (defui pdfimg [viewer src]
   [:img {:src src}]
   :click (fn [event]
-           (object/raise viewer :image-click! event)))
+           (object/raise viewer :image-click! event))
+  :load (fn [evemt]
+          (object/raise viewer :image-load! event)))
 
 (defn kwpairf [str]
   (let [[k v] (.split str ":")]
@@ -103,16 +105,20 @@
                 :zoom-factor 1.25
                 :restore-top nil
                 :restore-left nil
-                :editor nil
+                :sync-msg nil
+                :rendering false
+                :loading-count 0
                 :behaviors [::destroy-on-close
                             ::rem-client
                             ::render-pdf
+                            ::render-done
                             ::zoom-in!
                             ::zoom-out!
                             ::set-zoom!
                             ::show-log!
                             ::hide-log!
                             ::image-click!
+                            ::image-load!
                             ::init!
                             ::set-client-name
                             ::set-active
@@ -222,33 +228,50 @@
 
 (behavior ::render-pdf
           :triggers #{:set-pdf}
-          :reaction (fn [this path editor]
+          :reaction (fn [this path]
+                      (object/merge! this {:rendering true})
                       (let [randstr (.toString (rand-int 1679616) 36)
                             filename (files/basename path)
                             basename (files/without-ext filename)
                             dirname (files/parent path)
-                            imgdir (files/join dirname (str ".img." filename))
-                            pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
-                            sync-box   (dom/$ :div#sync-box   (object/->content this))
-                            scroll-top (.-scrollTop pdf-viewer)
-                            scroll-left (.-scrollLeft pdf-viewer)]
+                            imgdir (files/join dirname (str ".img." filename))]
                         (if (files/exists? imgdir)
                           (files/delete! imgdir))
                         (files/mkdir imgdir)
+                        (object/raise this :set-name filename)
+                        (object/merge! this {:pdfname path})
                         (lt.plugins.litex/run-commands [(str "pdftoppm -png \"" basename ".pdf\" \".img." filename "/" randstr "\"")]
                                                        dirname
                                                        (fn [error stdout stderr]
-                                                         (while (not (= sync-box (first (dom/children pdf-viewer))))
-                                                           (dom/remove (first (dom/children pdf-viewer))))
-                                                         (doseq [f (files/ls imgdir)]
-                                                           (dom/before sync-box (pdfimg this (str "file://" (files/join imgdir f)))))
-                                                         (object/raise this :set-zoom!)
-                                                         (if editor
-                                                           (object/raise editor :sync-forward))
-                                                         (object/raise this :set-name filename)
-                                                         (object/merge! this {:restore-top scroll-top
-                                                                              :restore-left scroll-left
-                                                                              :pdfname path}))))))
+                                                         (object/raise this :render-done error stdout stderr imgdir))))))
+
+(behavior ::render-done
+          :triggers #{:render-done}
+          :reaction (fn [this error stdout stderr imgdir]
+                      (let [pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
+                            sync-box   (dom/$ :div#sync-box   (object/->content this))
+                            scroll-top (.-scrollTop pdf-viewer)
+                            scroll-left (.-scrollLeft pdf-viewer)]
+                        (while (not (= sync-box (first (dom/children pdf-viewer))))
+                          (dom/remove (first (dom/children pdf-viewer))))
+                        (doseq [f (files/ls imgdir)]
+                          (dom/before sync-box (pdfimg this (str "file://" (files/join imgdir f)))))
+                        (object/raise this :set-zoom!)
+                        (object/merge! this {:restore-top scroll-top
+                                             :restore-left scroll-left
+                                             :loading-count (- (count (dom/children pdf-viewer)) 1)}))))
+
+(behavior ::image-load!
+          :triggers #{:image-load!}
+          :reaction (fn [this event]
+                      (let [count (- (:loading-count @this) 1)]
+                        (object/merge! this {:loading-count count})
+                        (if (= count 0)
+                          (do
+                            (object/merge! this {:rendering false})
+                            (when-let [sync-msg (:sync-msg @this)]
+                              (object/raise (:client @this) :litex.forward-sync! sync-msg)
+                              (object/merge! this {:sync-msg nil})))))))
 
 (behavior ::zoom-in!
           :triggers #{:zoom-in!}
@@ -360,7 +383,8 @@
                                     viewer (:frame @this)]
                                 (if-not (:error data)
                                   (do
-                                    (object/raise viewer :set-pdf (:pdfname data) (:editor data))
+                                    (object/raise viewer :set-pdf (:pdfname data))
+                                    (object/raise (:editor data) :sync-forward)
                                     (object/raise viewer :hide-log!))
                                   (object/raise viewer :show-log!))
                                 (set! (.-innerText log-viewer) (str (:stdout data) (:stderr data)))
@@ -369,54 +393,57 @@
 (behavior ::forward-sync
           :triggers #{:litex.forward-sync!}
           :reaction (fn [this msg]
-                      (let [data (:data msg)
-                            pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
-                            sync-box (dom/$ :div#sync-box (object/->content this))
-                            output-split (and (:stdout data) (rest (.split (:stdout data) "\nOutput")))
-                            restore-top (:restore-top @(:frame @this))
-                            restore-left (:restore-left @(:frame @this))]
-                        (object/merge! (:frame @this) {:restore-top nil :restore-left nil})
-                        (if output-split  ;; locs is lazy?
-                          (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
-                                zoom (:zoom @(:frame @this))
-                                ;; Need to find bounding box including all boxes in locs
-                                bbleft (apply min (map :h locs))
-                                bbtop (apply min (map #(- (:v %) (:H %)) locs))
-                                bbright (apply max (map #(+ (:h %) (:W %)) locs))
-                                bbbottom (apply max (map :v locs))
-                                bbwidth (- bbright bbleft)
-                                bbheight (- bbbottom bbtop)
-                                vleft (or restore-left (.-scrollLeft pdf-viewer))
-                                vwidth (.-clientWidth pdf-viewer)
-                                vright (+ vleft vwidth)
-                                vtop (or restore-top (.-scrollTop pdf-viewer))
-                                vheight (.-clientHeight pdf-viewer)
-                                vbottom (+ vtop vheight)]
-                            (dom/remove-class sync-box :animate)
-                            ;; Positioning algorithm:
-                            ;; The x and y coordinates are treated separately.  For each,
-                            ;;  - If the node is already within the view, do not change the view.
-                            ;;  - Else, if the node can fit in the view, center it.
-                            ;;  - Else, align the node with the top/left of the view.
-                            ;; There is no need for bounds checking, since the viewer will not scroll
-                            ;; outside of its bounds.
-                            (set! (.-scrollLeft pdf-viewer)
-                                  (cond
-                                   (and (>= (* bbleft zoom) vleft) (<= (* bbright zoom) vright)) vleft
-                                   (<= (* bbwidth zoom) vwidth) (+ (* bbleft zoom) (/ (- (* bbwidth zoom) vwidth) 2))
-                                   :else (* bbleft zoom)))
-                            (set! (.-scrollTop pdf-viewer)
-                                  (cond
-                                   (and (>= (* bbtop zoom) vtop) (<= (* bbbottom zoom) vbottom)) vtop
-                                   (<= (* bbheight zoom) vheight) (+ (* bbtop zoom) (/ (- (* bbheight zoom) vheight) 2))
-                                   :else (* bbtop zoom)))
+                      (if (:rendering @(:frame @this))
+                        (object/merge! (:frame @this) {:sync-msg msg})
+                        (let [data (:data msg)
+                              pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
+                              sync-box (dom/$ :div#sync-box (object/->content this))
+                              output-split (and (:stdout data) (rest (.split (:stdout data) "\nOutput")))
+                              restore-top (:restore-top @(:frame @this))
+                              restore-left (:restore-left @(:frame @this))]
+                          (object/merge! (:frame @this) {:restore-top nil :restore-left nil})
+                          (set! (.-offsetHeight pdf-viewer) (.-offsetHeight pdf-viewer))
+                          (if output-split  ;; locs is lazy?
+                            (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
+                                  zoom (:zoom @(:frame @this))
+                                  ;; Need to find bounding box including all boxes in locs
+                                  bbleft (apply min (map :h locs))
+                                  bbtop (apply min (map #(- (:v %) (:H %)) locs))
+                                  bbright (apply max (map #(+ (:h %) (:W %)) locs))
+                                  bbbottom (apply max (map :v locs))
+                                  bbwidth (- bbright bbleft)
+                                  bbheight (- bbbottom bbtop)
+                                  vleft (or restore-left (.-scrollLeft pdf-viewer))
+                                  vwidth (.-clientWidth pdf-viewer)
+                                  vright (+ vleft vwidth)
+                                  vtop (or restore-top (.-scrollTop pdf-viewer))
+                                  vheight (.-clientHeight pdf-viewer)
+                                  vbottom (+ vtop vheight)]
+                              (dom/remove-class sync-box :animate)
+                              ;; Positioning algorithm:
+                              ;; The x and y coordinates are treated separately.  For each,
+                              ;;  - If the node is already within the view, do not change the view.
+                              ;;  - Else, if the node can fit in the view, center it.
+                              ;;  - Else, align the node with the top/left of the view.
+                              ;; There is no need for bounds checking, since the viewer will not scroll
+                              ;; outside of its bounds.
+                              (set! (.-scrollLeft pdf-viewer)
+                                    (cond
+                                     (and (>= (* bbleft zoom) vleft) (<= (* bbright zoom) vright)) vleft
+                                     (<= (* bbwidth zoom) vwidth) (+ (* bbleft zoom) (/ (- (* bbwidth zoom) vwidth) 2))
+                                     :else (* bbleft zoom)))
+                              (set! (.-scrollTop pdf-viewer)
+                                    (cond
+                                     (and (>= (* bbtop zoom) vtop) (<= (* bbbottom zoom) vbottom)) vtop
+                                     (<= (* bbheight zoom) vheight) (+ (* bbtop zoom) (/ (- (* bbheight zoom) vheight) 2))
+                                     :else (* bbtop zoom)))
 
-                            (dom/css sync-box {:left (str bbleft "px")
-                                               :top (str bbtop "px")
-                                               :width (str (- bbright bbleft) "px")
-                                               :height (str (- bbbottom bbtop) "px")})
-                            (dom/add-class sync-box :animate))
-                          (js/console.log "No synctex results!")))))
+                              (dom/css sync-box {:left (str bbleft "px")
+                                                 :top (str bbtop "px")
+                                                 :width (str (- bbright bbleft) "px")
+                                                 :height (str (- bbbottom bbtop) "px")})
+                              (dom/add-class sync-box :animate))
+                            (js/console.log "No synctex results!"))))))
 
 (defn pdf-to-elem [elem loc]
   (let [{:keys [h v W H Page]} loc
