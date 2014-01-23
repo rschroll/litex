@@ -11,9 +11,7 @@
             [lt.objs.clients :as clients]
             [lt.objs.files :as files]
             [lt.objs.proc :as proc]
-            [lt.objs.notifos :as notifos]
-            [lt.util.dom :refer [$ append]]
-            [lt.util.js :refer [wait]])
+            [lt.objs.notifos :as notifos])
   (:require-macros [lt.macros :refer [behavior defui]]))
 
 (def _exec (.-exec (js/require "child_process")))
@@ -50,8 +48,7 @@
                                                           :%p path
                                                           :%b (files/without-ext (files/basename path))
                                                           :%d (files/parent path)
-                                                          :%e (files/ext path)
-                                                          :%r (.toString (rand-int 1679616) 36)})))
+                                                          :%e (files/ext path)})))
         imgdir (str (pathmap "%d") "/.img." (pathmap "%f"))
         pdfname (str (files/join (pathmap "%d") (pathmap "%b")) ".pdf")
         exitfunc (fn [error stdout stderr]
@@ -62,7 +59,6 @@
                                  (assoc info :error error
                                              :stdout stdout
                                              :stderr stderr
-                                             :imgdir imgdir
                                              :editor editor
                                              :pdfname pdfname)
                                  :only editor))]
@@ -72,18 +68,11 @@
                        :info info})
     ;; Note that when client is created, we get a placeholder back instead.  Therefore,
     ;; we can't store this value.  Instead, we get the client again when we next need it.
-    (if (= connection-command :editor.eval.tex)
-      (do
-        (if (files/exists? imgdir)
-          (files/delete! imgdir))
-        (files/mkdir imgdir)))
     (run-commands (map pathmap commands) (files/parent path) exitfunc)))
 
 (def pdflatex-commands ["pdflatex -halt-on-error --synctex=1 \"%f\""])
 (def dvilatex-commands ["latex -halt-on-error --synctex=1 \"%f\""
                         "dvipdf \"%b\""])
-(def pdflatex-preview (conj pdflatex-commands
-                            "pdftoppm -png \"%b.pdf\" \".img.%f/%r\""))
 
 (behavior ::on-eval
           :triggers #{:eval
@@ -100,7 +89,7 @@
           :triggers #{:eval!}
           :reaction (fn [this event]
                       (let [{:keys [info origin]} event]
-                        (run-commands-to-client :editor.eval.tex origin pdflatex-preview))))
+                        (run-commands-to-client :editor.eval.tex origin pdflatex-commands))))
 
 (behavior ::sync-forward
           :triggers #{:sync-forward}

@@ -72,7 +72,8 @@
                                :frame this
                                :frame-id (browser-id this)
                                :tags [:zframe.client]
-                               :behaviors [::tex-eval
+                               :behaviors [::render-pdf
+                                           ::tex-eval
                                            ::forward-sync
                                            ::handle-send!
                                            ::handle-close!]
@@ -320,30 +321,49 @@
                               (object/raise (:frame @this) :close)
                               (clients/rem! this)))
 
+(behavior ::render-pdf
+          :triggers #{:editor.eval.tex!}
+          :reaction (fn [this msg]
+                      (let [data (:data msg)
+                            randstr (.toString (rand-int 1679616) 36)
+                            filename (files/basename (:pdfname data))
+                            basename (files/without-ext filename)
+                            dirname (files/parent (:pdfname data))
+                            imgdir (files/join dirname (str ".img." filename))
+                            pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
+                            sync-box   (dom/$ :div#sync-box   (object/->content this))
+                            scroll-top (.-scrollTop pdf-viewer)
+                            scroll-left (.-scrollLeft pdf-viewer)
+                            viewer (:frame @this)]
+                        (if-not (:error data)
+                          (do
+                            (if (files/exists? imgdir)
+                              (files/delete! imgdir))
+                            (files/mkdir imgdir)
+                            (lt.plugins.litex/run-commands [(str "pdftoppm -png \"" basename ".pdf\" \".img." filename "/" randstr "\"")]
+                                                           dirname
+                                                           (fn [error stdout stderr]
+                                                             (while (not (= sync-box (first (dom/children pdf-viewer))))
+                                                               (dom/remove (first (dom/children pdf-viewer))))
+                                                             (doseq [f (files/ls imgdir)]
+                                                               (dom/before sync-box (pdfimg viewer (str "file://" (files/join imgdir f)))))
+                                                             (object/raise viewer :set-zoom!)
+                                                             (object/merge! viewer {:restore-top scroll-top
+                                                                                    :restore-left scroll-left
+                                                                                    :pdfname (:pdfname data)})
+                                                             (object/raise (:editor data) :sync-forward))))))))
+
 (behavior ::tex-eval
                   :triggers #{:editor.eval.tex!}
                   :reaction (fn [this msg]
                               (let [data (:data msg)
-                                    imgdir (:imgdir data)
-                                    pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
-                                    sync-box   (dom/$ :div#sync-box   (object/->content this))
                                     log-viewer (dom/$ :pre#log-viewer (object/->content this))
-                                    scroll-top (.-scrollTop pdf-viewer)
-                                    scroll-left (.-scrollLeft pdf-viewer)
                                     viewer (:frame @this)]
                                 (if-not (:error data)
                                   (do
-                                    (while (not (= sync-box (first (dom/children pdf-viewer))))
-                                      (dom/remove (first (dom/children pdf-viewer))))
-                                    (doseq [f (files/ls imgdir)]
-                                      (dom/before sync-box (pdfimg viewer (str "file://" (files/join imgdir f)))))
-                                    (object/raise viewer :set-zoom!)
-                                    (object/merge! viewer {:restore-top scroll-top
-                                                           :restore-left scroll-left
-                                                           :pdfname (:pdfname data)})
+                                    (object/merge! viewer {:pdfname (:pdfname data)})
                                     (object/raise viewer :set-name (files/basename (:pdfname data)))
-                                    (object/raise viewer :hide-log!)
-                                    (object/raise (:editor data) :sync-forward))
+                                    (object/raise viewer :hide-log!))
                                   (object/raise viewer :show-log!))
                                 (set! (.-innerText log-viewer) (str (:stdout data) (:stderr data)))
                                 (set! (.-scrollTop log-viewer) (- (.-scrollHeight log-viewer) (.-clientHeight log-viewer))))))
