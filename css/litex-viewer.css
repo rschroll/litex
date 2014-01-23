@@ -1,0 +1,66 @@
+#litex-viewer {
+  position: relative;
+}
+#pdf-viewer-container {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 70%;
+  overflow: hidden;
+}
+#litex-viewer.hide-log #pdf-viewer-container {
+  height: 100%;
+}
+#pdf-viewer {
+  position: absolute;
+  top: 0;
+  bottom: 2em;
+  width: 100%;
+  overflow: scroll;
+}
+#litex-viewer nav {
+  position: absolute;
+  bottom: 0;
+  height: 2em;
+  width: 100%
+}
+#litex-viewer nav button[value='show-log'] {
+  display: none;
+}
+#litex-viewer.hide-log nav button[value='show-log'] {
+  display: inline;
+  float: right;
+}
+#litex-viewer nav button[value='hide-log'] {
+  display: inline;
+  float: right;
+}
+#litex-viewer.hide-log nav button[value='hide-log'] {
+  display: none;
+}
+#pdf-viewer img {
+  display: block;
+  margin: 20px;
+  border: 2px solid black;
+}
+#log-viewer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 30%;
+  overflow: scroll;
+  font-family: monospace;
+}
+#litex-viewer.hide-log #log-viewer {
+  visibility: hidden; /* visibility hidden so we can still scroll to bottom */
+}
+#sync-box {
+  position: absolute;
+  border: 3px solid blue;
+  opacity: 1;
+}
+#sync-box.animate {
+  transition-property: opacity;
+  transition-duration: 5s;
+  opacity: 0;
+}
