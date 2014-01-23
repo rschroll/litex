@@ -81,7 +81,7 @@
           :triggers #{:proc.out}
           :reaction (fn [this data]
                       (let [loc (into {} (remove nil? (map kwpair (.split (.toString data) "\n"))))
-                            filename (files/join (:cwd @this) (:Input loc))
+                            filename (:Input loc)
                             line (- (:Line loc) 1)
                             column (- (:Column loc) 1)]
                         (cmd/exec! :open-path filename)
