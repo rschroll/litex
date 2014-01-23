@@ -72,8 +72,7 @@
                                :frame this
                                :frame-id (browser-id this)
                                :tags [:zframe.client]
-                               :behaviors [::render-pdf
-                                           ::tex-eval
+                               :behaviors [::tex-eval
                                            ::forward-sync
                                            ::handle-send!
                                            ::handle-close!]
@@ -104,8 +103,10 @@
                 :zoom-factor 1.25
                 :restore-top nil
                 :restore-left nil
+                :editor nil
                 :behaviors [::destroy-on-close
                             ::rem-client
+                            ::render-pdf
                             ::zoom-in!
                             ::zoom-out!
                             ::set-zoom!
@@ -120,7 +121,7 @@
                             ::inactive-context]
                 :init (fn [this]
                         (object/merge! this {:client (connect-client this)})
-                        [:div#litex-viewer.cm-s-default
+                        [:div#litex-viewer.cm-s-default.hide-log
                          [:style {:type "text/css"} "
                           #litex-viewer {
                           position: relative;
@@ -218,6 +219,36 @@
                               (when-let [b (first (remove #{this} (object/by-tag :browser)))]
                                 (ctx/in! :global.browser b))
                               (clients/rem! (:client @this))))
+
+(behavior ::render-pdf
+          :triggers #{:set-pdf}
+          :reaction (fn [this path editor]
+                      (let [randstr (.toString (rand-int 1679616) 36)
+                            filename (files/basename path)
+                            basename (files/without-ext filename)
+                            dirname (files/parent path)
+                            imgdir (files/join dirname (str ".img." filename))
+                            pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
+                            sync-box   (dom/$ :div#sync-box   (object/->content this))
+                            scroll-top (.-scrollTop pdf-viewer)
+                            scroll-left (.-scrollLeft pdf-viewer)]
+                        (if (files/exists? imgdir)
+                          (files/delete! imgdir))
+                        (files/mkdir imgdir)
+                        (lt.plugins.litex/run-commands [(str "pdftoppm -png \"" basename ".pdf\" \".img." filename "/" randstr "\"")]
+                                                       dirname
+                                                       (fn [error stdout stderr]
+                                                         (while (not (= sync-box (first (dom/children pdf-viewer))))
+                                                           (dom/remove (first (dom/children pdf-viewer))))
+                                                         (doseq [f (files/ls imgdir)]
+                                                           (dom/before sync-box (pdfimg this (str "file://" (files/join imgdir f)))))
+                                                         (object/raise this :set-zoom!)
+                                                         (if editor
+                                                           (object/raise editor :sync-forward))
+                                                         (object/raise this :set-name filename)
+                                                         (object/merge! this {:restore-top scroll-top
+                                                                              :restore-left scroll-left
+                                                                              :pdfname path}))))))
 
 (behavior ::zoom-in!
           :triggers #{:zoom-in!}
@@ -321,38 +352,6 @@
                               (object/raise (:frame @this) :close)
                               (clients/rem! this)))
 
-(behavior ::render-pdf
-          :triggers #{:editor.eval.tex!}
-          :reaction (fn [this msg]
-                      (let [data (:data msg)
-                            randstr (.toString (rand-int 1679616) 36)
-                            filename (files/basename (:pdfname data))
-                            basename (files/without-ext filename)
-                            dirname (files/parent (:pdfname data))
-                            imgdir (files/join dirname (str ".img." filename))
-                            pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
-                            sync-box   (dom/$ :div#sync-box   (object/->content this))
-                            scroll-top (.-scrollTop pdf-viewer)
-                            scroll-left (.-scrollLeft pdf-viewer)
-                            viewer (:frame @this)]
-                        (if-not (:error data)
-                          (do
-                            (if (files/exists? imgdir)
-                              (files/delete! imgdir))
-                            (files/mkdir imgdir)
-                            (lt.plugins.litex/run-commands [(str "pdftoppm -png \"" basename ".pdf\" \".img." filename "/" randstr "\"")]
-                                                           dirname
-                                                           (fn [error stdout stderr]
-                                                             (while (not (= sync-box (first (dom/children pdf-viewer))))
-                                                               (dom/remove (first (dom/children pdf-viewer))))
-                                                             (doseq [f (files/ls imgdir)]
-                                                               (dom/before sync-box (pdfimg viewer (str "file://" (files/join imgdir f)))))
-                                                             (object/raise viewer :set-zoom!)
-                                                             (object/merge! viewer {:restore-top scroll-top
-                                                                                    :restore-left scroll-left
-                                                                                    :pdfname (:pdfname data)})
-                                                             (object/raise (:editor data) :sync-forward))))))))
-
 (behavior ::tex-eval
                   :triggers #{:editor.eval.tex!}
                   :reaction (fn [this msg]
@@ -361,8 +360,7 @@
                                     viewer (:frame @this)]
                                 (if-not (:error data)
                                   (do
-                                    (object/merge! viewer {:pdfname (:pdfname data)})
-                                    (object/raise viewer :set-name (files/basename (:pdfname data)))
+                                    (object/raise viewer :set-pdf (:pdfname data) (:editor data))
                                     (object/raise viewer :hide-log!))
                                   (object/raise viewer :show-log!))
                                 (set! (.-innerText log-viewer) (str (:stdout data) (:stderr data)))
@@ -431,15 +429,8 @@
 
 (cmd/command {:command :add-litex-viewer-tab
               :desc "LiTeX: Add PDF viewer for LaTeX document"
-              :exec (fn [loc]
+              :exec (fn [filename]
                       (let [b (add)]
-                        (if-not loc
-                          (object/raise b :focus!)
-                          (object/raise b :navigate! loc))))})
-
-(defn start-viewer [loc]
-  (let [b (add)]
-    (if-not loc
-      (object/raise b :focus!)
-      (object/raise b :navigate! loc))
-    b))
+                        (object/raise b :focus!)
+                        (if filename
+                          (object/raise b :set-pdf filename nil))))})

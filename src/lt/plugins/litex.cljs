@@ -21,9 +21,6 @@
                          "windowsVerbatimArguments" (when (= js/process.platform "win32") true))
          exitfunc))
 
-(defn start-browser [path]
-  (cmd/exec! :add-litex-viewer-tab (str "file://" path)))
-
 (defn kwpair [str]
   (let [[k v] (.split str ":")]
     (if v [(keyword k) v] nil)))
@@ -39,7 +36,7 @@
                               (exitfunc error stdout stderr)
                               (run-commands commands cwd exitfunc :accout stdout))))))))
 
-(defn run-commands-to-client [connection-command editor commands]
+(defn run-commands-to-client [connection-command editor commands render?]
   (let [info (-> @editor :info)
         path (-> @editor :info :path)
         pathmap (fn [s]
@@ -64,7 +61,7 @@
                                  :only editor))]
     (eval/get-client! {:command connection-command
                        :origin editor
-                       :create (fn [] (start-browser path))
+                       :create (fn [] (cmd/exec! :add-litex-viewer-tab (if render? pdfname nil)))
                        :info info})
     ;; Note that when client is created, we get a placeholder back instead.  Therefore,
     ;; we can't store this value.  Instead, we get the client again when we next need it.
@@ -89,14 +86,15 @@
           :triggers #{:eval!}
           :reaction (fn [this event]
                       (let [{:keys [info origin]} event]
-                        (run-commands-to-client :editor.eval.tex origin pdflatex-commands))))
+                        (run-commands-to-client :editor.eval.tex origin pdflatex-commands false))))
 
 (behavior ::sync-forward
           :triggers #{:sync-forward}
           :reaction (fn [editor]
                       (let [pos (ed/->cursor editor)]
                         (run-commands-to-client :litex.forward-sync editor
-                                     [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":%f\" -o \"%b\"")]))))
+                                     [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":%f\" -o \"%b\"")]
+                                     true))))
 
 (behavior ::sync-backward
           :triggers #{:sync-backward}
