@@ -26,6 +26,10 @@
 (defn start-browser [path]
   (cmd/exec! :add-litex-viewer-tab (str "file://" path)))
 
+(defn kwpair [str]
+  (let [[k v] (.split str ":")]
+    (if v [(keyword k) v] nil)))
+
 (defn run-commands [commands cwd exitfunc & {:keys [accout] :or {accout ""}}]
   (if (empty? commands)
     (exitfunc nil accout "")
@@ -105,10 +109,28 @@
                         (run-commands-to-client :litex.forward-sync editor
                                      [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":%f\" -o \"%b\"")]))))
 
+(behavior ::sync-backward
+          :triggers #{:sync-backward}
+          :reaction (fn [this cwd pdfname pagenum clickX clickY]
+                      (run-commands [(str"synctex edit -o \"" pagenum ":" clickX ":" clickY ":" pdfname "\"")]
+                                    cwd
+                                    (fn [error stdout stderr]
+                                      (if-not error
+                                        (let [loc (into {} (remove nil? (map kwpair (.split stdout "\n"))))
+                                              filename (files/join cwd (:Input loc))
+                                              line (- (:Line loc) 1)
+                                              column (- (:Column loc) 1)]
+                                          (cmd/exec! :open-path filename)
+                                          (if-let [edit (first (pool/by-path filename))]
+                                            (do
+                                              (ed/move-cursor edit {:line line :ch (max column 0)})
+                                              (ed/center-cursor edit))
+                                            (js/console.log (str "LiTeX could not find editor with " filename)))))))))
+
 (object/object* ::tex-lang
                 :tags #{:tex.lang}
-                :behaviors [::eval!]
-                :triggers #{:eval!})
+                :behaviors [::eval! ::sync-backward]
+                :triggers #{:eval! :sync-backward})
 
 (def tex-lang (object/create ::tex-lang))
 

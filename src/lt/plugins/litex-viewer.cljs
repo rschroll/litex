@@ -50,10 +50,6 @@
   :click (fn [event]
            (object/raise viewer :image-click! event)))
 
-(defn kwpair [str]
-  (let [[k v] (.split str ":")]
-    (if v [(keyword k) v] nil)))
-
 (defn kwpairf [str]
   (let [[k v] (.split str ":")]
     (if v [(keyword k) (js/parseFloat v)] nil)))
@@ -69,30 +65,6 @@
 
 (defn handle-cb [cbid command data]
   (object/raise clients/clients :message [cbid command data]))
-
-
-(object/object* ::synctex-proc
-                :behaviors [::on-out ::on-error]
-                :init (fn [this cwd]
-                        (object/merge! this {:cwd cwd})
-                        nil))
-
-(behavior ::on-out
-          :triggers #{:proc.out}
-          :reaction (fn [this data]
-                      (let [loc (into {} (remove nil? (map kwpair (.split (.toString data) "\n"))))
-                            filename (files/join (:cwd @this) (:Input loc))
-                            line (- (:Line loc) 1)
-                            column (- (:Column loc) 1)]
-                        (cmd/exec! :open-path filename)
-                        (if-let [ed (first (pool/by-path filename))]
-                          (editor/move-cursor ed {:line line :ch (max column 0)})
-                          (js/console.log (str "LiTeX could not find editor with " filename))))))
-
-(behavior ::on-error
-          :triggers #{:proc.error}
-          :reaction (fn [this data]
-                      (js/console.log (str "Synctex error: " (.toString data)))))
 
 
 (defn connect-client [this]
@@ -301,10 +273,8 @@
                               pagenum (js/parseInt (last (.split (-> event .-srcElement .-src) "-")))
                               cwd (files/parent (:pdfname @this))
                               pdfname (files/basename (:pdfname @this))]
-                          (proc/exec {:command "synctex"
-                                      :args ["edit" "-o" (str pagenum ":" clickX ":" clickY ":" pdfname)]
-                                      :cwd cwd
-                                      :obj (object/create ::synctex-proc cwd)})))))
+                          (object/raise lt.plugins.litex/tex-lang :sync-backward
+                                        cwd pdfname pagenum clickX clickY)))))
 
 (behavior ::init!
                   :triggers #{:init}
