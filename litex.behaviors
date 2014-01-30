@@ -1,5 +1,5 @@
 {:+ {:app [(:lt.objs.plugins/load-js "litex_compiled.js")
            (:lt.objs.plugins/load-css "css/litex-viewer.css")]
-     :editor.latex [:lt.plugins.litex/eval-on-save :lt.plugins.litex/on-eval :lt.plugins.litex/sync-forward]
+     :editor.latex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward]
      :latex.lang [:lt.plugins.litex/eval!]
      }}

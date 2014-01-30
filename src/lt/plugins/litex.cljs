@@ -25,6 +25,11 @@
   (let [[k v] (.split str ":")]
     (if v [(keyword k) v] nil)))
 
+(defn ensure-absolute [path dir]
+  (if (files/absolute? path)
+    path
+    (files/join dir path)))
+
 (defn run-commands [commands cwd exitfunc & {:keys [accout] :or {accout ""}}]
   (if (empty? commands)
     (exitfunc nil accout "")
@@ -36,18 +41,30 @@
                               (exitfunc error stdout stderr)
                               (run-commands commands cwd exitfunc :accout stdout))))))))
 
-(defn run-commands-to-client [connection-command editor commands render?]
-  (let [info (-> @editor :info)
-        path (-> @editor :info :path)
+(defn get-config-from-settings [editor which]
+  (let [path (-> @editor :info :path)
+        settings (get-settings which (files/parent path))
+        filename (files/basename (or (get settings "filename") path))
+        cwd (if (settings "directory")
+              (ensure-absolute (settings "directory") (files/parent path))
+              (files/parent path))
+        commands (or (COMMANDS (settings "commands")) (settings "commands"))
+
         pathmap (fn [s]
-                  (clojure/string.replace s #"%[fpbder%]"
-                                          #((keyword %1) {:%f (files/basename path)
-                                                          :%p path
-                                                          :%b (files/without-ext (files/basename path))
-                                                          :%d (files/parent path)
-                                                          :%e (files/ext path)})))
-        imgdir (str (pathmap "%d") "/.img." (pathmap "%f"))
-        pdfname (str (files/join (pathmap "%d") (pathmap "%b")) ".pdf")
+                  (clojure/string.replace s #"%[fpbde%]"
+                                          #((keyword %1) {:%f filename
+                                                          :%p (files/join cwd filename)
+                                                          :%b (files/without-ext filename)
+                                                          :%d cwd
+                                                          :%e (files/ext filename)
+                                                          :%% "%"})))
+        pdfname (if (settings "outputname")
+                  (ensure-absolute (pathmap (settings "outputname")) cwd)
+                  (-> @editor :pdfname))]
+    {:commands (map pathmap commands) :cwd cwd :pdfname pdfname}))
+
+(defn run-commands-to-client [connection-command editor commands cwd pdfname render?]
+  (let [info (:info @editor)
         exitfunc (fn [error stdout stderr]
                    (clients/send (eval/get-client! {:command connection-command
                                                     :origin editor
@@ -65,36 +82,64 @@
                        :info info})
     ;; Note that when client is created, we get a placeholder back instead.  Therefore,
     ;; we can't store this value.  Instead, we get the client again when we next need it.
-    (run-commands (map pathmap commands) (files/parent path) exitfunc)))
+    (object/merge! editor {:pdfname pdfname})
+    (run-commands commands cwd exitfunc)))
 
-(def pdflatex-commands ["pdflatex -halt-on-error --synctex=1 \"%f\""])
-(def dvilatex-commands ["latex -halt-on-error --synctex=1 \"%f\""
-                        "dvipdf \"%b\""])
+(defn load-settings [path]
+  (let [file (files/open-sync path)]
+    (js->clj (js/JSON.parse (:content file)))))
+
+(defn get-settings [which cwd]
+  (apply merge (map #(get % which) [DEFAULT_SETTINGS
+                                    (load-settings (files/home (files/join ".config" "litexrc")))
+                                    (load-settings (files/join cwd ".litexrc"))])))
+
+(def DEFAULT_SETTINGS
+  {"file" {"filename" nil "directory" nil "commands" "pdflatex" "outputname" "%b.pdf"}
+   "project" {"filename" nil "directory" nil "commands" "pdflatex" "outputname" "%b.pdf"}})
+
+(def COMMANDS
+  {"pdflatex" ["pdflatex -halt-on-error --synctex=1 \"%f\""]
+   "latex-dvipdf" ["latex -halt-on-error --synctex=1 \"%f\"" "dvipdf \"%b\""]
+   "latex-dvips-ps2pdf" ["latex -halt-on-error --synctex=1 \"%f\"" "dvips \"%b\"" "ps2pdf \"%b.ps\""]})
+
 
 (behavior ::on-eval
-          :triggers #{:eval
-                      :eval.one}
+          :triggers #{:eval}
           :reaction (fn [editor]
-                      (object/raise editor :save)))
+                      (object/raise editor :save)
+                      (object/raise tex-lang :eval! "project" editor)))
 
-(behavior ::eval-on-save
-          :triggers #{:save}
+(behavior ::on-eval.one
+          :triggers #{:eval.one}
           :reaction (fn [editor]
-                      (object/raise tex-lang :eval! {:origin editor :info (-> @editor :info)})))
+                      (object/raise editor :save)
+                      (object/raise tex-lang :eval! "file" editor)))
 
 (behavior ::eval!
           :triggers #{:eval!}
-          :reaction (fn [this event]
-                      (let [{:keys [info origin]} event]
-                        (run-commands-to-client :editor.eval.tex origin pdflatex-commands false))))
+          :reaction (fn [this which editor]
+                      (let [{:keys [commands cwd pdfname]} (get-config-from-settings editor which)]
+                        (run-commands-to-client :editor.eval.tex editor commands cwd pdfname false))))
 
 (behavior ::sync-forward
           :triggers #{:sync-forward}
           :reaction (fn [editor]
-                      (let [pos (ed/->cursor editor)]
-                        (run-commands-to-client :litex.forward-sync editor
-                                     [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":%f\" -o \"%b\"")]
-                                     true))))
+                      (let [pos (ed/->cursor editor)
+                            filename (files/basename (-> @editor :info :path))
+                            pdfname (some #(let [name (:pdfname (%))]
+                                             (if (files/exists? name) name nil))
+                                          ;; This silliness is to avoid running get-config-from-settings
+                                          ;; if we don't need the result.
+                                          [(fn [] @editor)
+                                           #(get-config-from-settings editor "file")
+                                           #(get-config-from-settings editor "project")])]
+                        (if pdfname
+                          (run-commands-to-client :litex.forward-sync editor
+                                                  [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":"
+                                                        filename "\" -o \"" (files/basename pdfname) "\"")]
+                                                  (files/parent pdfname) pdfname true)
+                          (js/console.log "Don't know the name of the PDF file this compiles to.  (Try compiling.)")))))
 
 (behavior ::sync-backward
           :triggers #{:sync-backward}
