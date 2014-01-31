@@ -44,23 +44,20 @@
 (defn get-config-from-settings [editor which]
   (let [path (-> @editor :info :path)
         settings (get-settings which (files/parent path))
-        filename (files/basename (or (get settings "filename") path))
-        cwd (if (settings "directory")
-              (ensure-absolute (settings "directory") (files/parent path))
-              (files/parent path))
+        fullfilename (ensure-absolute (or (get settings "filename") path) (files/parent path))
+        filename (files/basename fullfilename)
+        cwd (files/parent fullfilename)
         commands (or (COMMANDS (settings "commands")) (settings "commands"))
 
         pathmap (fn [s]
                   (clojure/string.replace s #"%[fpbde%]"
                                           #((keyword %1) {:%f filename
-                                                          :%p (files/join cwd filename)
+                                                          :%p fullfilename
                                                           :%b (files/without-ext filename)
                                                           :%d cwd
                                                           :%e (files/ext filename)
                                                           :%% "%"})))
-        pdfname (if (settings "outputname")
-                  (ensure-absolute (pathmap (settings "outputname")) cwd)
-                  (-> @editor :pdfname))]
+        pdfname (ensure-absolute (pathmap (settings "outputname")) cwd)]
     {:commands (map pathmap commands) :cwd cwd :pdfname pdfname}))
 
 (defn run-commands-to-client [connection-command editor commands cwd pdfname render?]
@@ -95,8 +92,8 @@
                                     (load-settings (files/join cwd ".litexrc"))])))
 
 (def DEFAULT_SETTINGS
-  {"file" {"filename" nil "directory" nil "commands" "pdflatex" "outputname" "%b.pdf"}
-   "project" {"filename" nil "directory" nil "commands" "pdflatex" "outputname" "%b.pdf"}})
+  {"file" {"filename" nil "commands" "pdflatex" "outputname" "%b.pdf"}
+   "project" {"filename" nil "commands" "pdflatex" "outputname" "%b.pdf"}})
 
 (def COMMANDS
   {"pdflatex" ["pdflatex -halt-on-error --synctex=1 \"%f\""]
