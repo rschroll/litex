@@ -325,57 +325,62 @@
 (behavior ::forward-sync
           :triggers #{:litex.forward-sync!}
           :reaction (fn [this msg]
-                      (if (:rendering @(:frame @this))
-                        (object/merge! (:frame @this) {:sync-msg msg})
-                        (let [data (:data msg)
-                              pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
-                              sync-box (dom/$ :div#sync-box (object/->content this))
-                              output-split (and (:stdout data) (rest (.split (:stdout data) "\nOutput")))
-                              restore-top (:restore-top @(:frame @this))
-                              restore-left (:restore-left @(:frame @this))]
-                          (object/merge! (:frame @this) {:restore-top nil :restore-left nil})
-                          (set! (.-offsetHeight pdf-viewer) (.-offsetHeight pdf-viewer))
-                          (if output-split  ;; locs is lazy?
-                            (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
-                                  zoom (:zoom @(:frame @this))
-                                  ;; Need to find bounding box including all boxes in locs
-                                  bbleft (apply min (map :h locs))
-                                  bbtop (apply min (map #(- (:v %) (:H %)) locs))
-                                  bbright (apply max (map #(+ (:h %) (:W %)) locs))
-                                  bbbottom (apply max (map :v locs))
-                                  bbwidth (- bbright bbleft)
-                                  bbheight (- bbbottom bbtop)
-                                  vleft (or restore-left (.-scrollLeft pdf-viewer))
-                                  vwidth (.-clientWidth pdf-viewer)
-                                  vright (+ vleft vwidth)
-                                  vtop (or restore-top (.-scrollTop pdf-viewer))
-                                  vheight (.-clientHeight pdf-viewer)
-                                  vbottom (+ vtop vheight)]
-                              (dom/remove-class sync-box :animate)
-                              ;; Positioning algorithm:
-                              ;; The x and y coordinates are treated separately.  For each,
-                              ;;  - If the node is already within the view, do not change the view.
-                              ;;  - Else, if the node can fit in the view, center it.
-                              ;;  - Else, align the node with the top/left of the view.
-                              ;; There is no need for bounds checking, since the viewer will not scroll
-                              ;; outside of its bounds.
-                              (set! (.-scrollLeft pdf-viewer)
-                                    (cond
-                                     (and (>= (* bbleft zoom) vleft) (<= (* bbright zoom) vright)) vleft
-                                     (<= (* bbwidth zoom) vwidth) (+ (* bbleft zoom) (/ (- (* bbwidth zoom) vwidth) 2))
-                                     :else (* bbleft zoom)))
-                              (set! (.-scrollTop pdf-viewer)
-                                    (cond
-                                     (and (>= (* bbtop zoom) vtop) (<= (* bbbottom zoom) vbottom)) vtop
-                                     (<= (* bbheight zoom) vheight) (+ (* bbtop zoom) (/ (- (* bbheight zoom) vheight) 2))
-                                     :else (* bbtop zoom)))
+                      (let [viewer (:frame @this)
+                            pdfname (-> msg :data :pdfname)]
+                        (if (not= pdfname (:pdfname @viewer))
+                          (object/raise viewer :set-pdf pdfname))  ;; Starts rendering
 
-                              (dom/css sync-box {:left (str bbleft "px")
-                                                 :top (str bbtop "px")
-                                                 :width (str (- bbright bbleft) "px")
-                                                 :height (str (- bbbottom bbtop) "px")})
-                              (dom/add-class sync-box :animate))
-                            (js/console.log "No synctex results!"))))))
+                        (if (:rendering @viewer)
+                          (object/merge! viewer {:sync-msg msg})
+                          (let [data (:data msg)
+                                pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
+                                sync-box (dom/$ :div#sync-box (object/->content this))
+                                output-split (and (:stdout data) (rest (.split (:stdout data) "\nOutput")))
+                                restore-top (:restore-top @viewer)
+                                restore-left (:restore-left @viewer)]
+                            (object/merge! viewer {:restore-top nil :restore-left nil})
+                            (set! (.-offsetHeight pdf-viewer) (.-offsetHeight pdf-viewer))
+                            (if output-split  ;; locs is lazy?
+                              (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
+                                    zoom (:zoom @(:frame @this))
+                                    ;; Need to find bounding box including all boxes in locs
+                                    bbleft (apply min (map :h locs))
+                                    bbtop (apply min (map #(- (:v %) (:H %)) locs))
+                                    bbright (apply max (map #(+ (:h %) (:W %)) locs))
+                                    bbbottom (apply max (map :v locs))
+                                    bbwidth (- bbright bbleft)
+                                    bbheight (- bbbottom bbtop)
+                                    vleft (or restore-left (.-scrollLeft pdf-viewer))
+                                    vwidth (.-clientWidth pdf-viewer)
+                                    vright (+ vleft vwidth)
+                                    vtop (or restore-top (.-scrollTop pdf-viewer))
+                                    vheight (.-clientHeight pdf-viewer)
+                                    vbottom (+ vtop vheight)]
+                                (dom/remove-class sync-box :animate)
+                                ;; Positioning algorithm:
+                                ;; The x and y coordinates are treated separately.  For each,
+                                ;;  - If the node is already within the view, do not change the view.
+                                ;;  - Else, if the node can fit in the view, center it.
+                                ;;  - Else, align the node with the top/left of the view.
+                                ;; There is no need for bounds checking, since the viewer will not scroll
+                                ;; outside of its bounds.
+                                (set! (.-scrollLeft pdf-viewer)
+                                      (cond
+                                       (and (>= (* bbleft zoom) vleft) (<= (* bbright zoom) vright)) vleft
+                                       (<= (* bbwidth zoom) vwidth) (+ (* bbleft zoom) (/ (- (* bbwidth zoom) vwidth) 2))
+                                       :else (* bbleft zoom)))
+                                (set! (.-scrollTop pdf-viewer)
+                                      (cond
+                                       (and (>= (* bbtop zoom) vtop) (<= (* bbbottom zoom) vbottom)) vtop
+                                       (<= (* bbheight zoom) vheight) (+ (* bbtop zoom) (/ (- (* bbheight zoom) vheight) 2))
+                                       :else (* bbtop zoom)))
+
+                                (dom/css sync-box {:left (str bbleft "px")
+                                                   :top (str bbtop "px")
+                                                   :width (str (- bbright bbleft) "px")
+                                                   :height (str (- bbbottom bbtop) "px")})
+                                (dom/add-class sync-box :animate))
+                              (js/console.log "No synctex results!")))))))
 
 (defn pdf-to-elem [elem loc]
   (let [{:keys [h v W H Page]} loc
