@@ -87,16 +87,24 @@
     (run-commands commands cwd exitfunc)))
 
 (defn load-settings [path]
-  (let [file (files/open-sync path)]
-    (try
-      (js->clj (js/JSON.parse (:content file)))
-      (catch js/Error e
-        (js/console.log (str "Error parsing " path ":\n  " e "\nIgnoring this file."))))))
+  (let [file (files/open-sync path)
+        content (:content file)]
+    (if content
+      (try
+        (js->clj (js/JSON.parse (.replace content (js/RegExp. "^\\s*//.*$" "gm") "")))
+        (catch js/Error e
+          (js/console.log (str "Error parsing " path ":\n  " e "\nIgnoring this file.")))))))
+
+(defn global-settings []
+  (files/home (files/join ".config" "litexrc")))
+
+(defn local-settings [cwd]
+  (files/join cwd ".litexrc"))
 
 (defn get-settings [which cwd]
   (apply merge (map #(get % which) [DEFAULT_SETTINGS
-                                    (load-settings (files/home (files/join ".config" "litexrc")))
-                                    (load-settings (files/join cwd ".litexrc"))])))
+                                    (load-settings (global-settings))
+                                    (load-settings (local-settings cwd))])))
 
 (def DEFAULT_SETTINGS
   {"file" {"filename" nil "commands" "pdflatex" "outputname" "%b.pdf"}
@@ -107,6 +115,50 @@
    "latex-dvipdf" ["latex -halt-on-error --synctex=1 \"%f\"" "dvipdf \"%b\""]
    "latex-dvips-ps2pdf" ["latex -halt-on-error --synctex=1 \"%f\"" "dvips \"%b\"" "ps2pdf \"%b.ps\""]})
 
+(def SETTINGS_TEMPLATE
+"// This document is in JSON format.  Note that there must be a comma
+// between every pair of attributes, but not following the last one.
+//
+// Note that the only comments recongnized by the parser are those
+// with a double slash preceded only by whitespace.
+{
+  // The \"file\" settings are used when compiling with the \"eval.one\"
+  // command, bound by default to \"Ctrl-Enter\".
+  \"file\": {
+    // The filename to use in the compilation.  The default, null, means
+    // to use the name of the file being edited (if a TeX file) or the
+    // last TeX file to be compiled.
+    //\"filename\": null,
+
+    // The commands to run.  Either
+    //  - a list of strings, each one a command to be run.  The
+    //    substitution patterns below will be replaced with values
+    //    derived from filename.
+    //  - one of \"pdflatex\" (the default), \"latex-dvipdf\", or
+    //    \"latex-dvips-ps2pdf\", to call those commands with
+    //    appropriate arguments.
+    //\"commands\": \"pdflatex\",
+
+    // The name of the PDF file created by this command.  The
+    // substitution patterns may be used.
+    //\"outputname\": \"%b.pdf\"
+  },
+  // The \"project\" settings are used when compiling with the \"eval\"
+  // command, bound by default to \"Ctrl-Shift-Enter\".
+  \"project\": {
+    // The same settings as for \"file\".
+  }
+}
+
+// Pattern | Substiution value
+// --------|------------------
+//    %f   | name of file
+//    %p   | full path of file
+//    %d   | directory of file
+//    %b   | base name, without file extension
+//    %e   | file extension
+//    %%   | a percent sign
+")
 
 (behavior ::on-eval
           :triggers #{:eval}
@@ -164,6 +216,17 @@
                                               (ed/center-cursor edit))
                                             (js/console.log (str "LiTeX could not find editor with " filename)))))))))
 
+(behavior ::edit-settings
+          :triggers #{:edit-settings}
+          :reaction (fn [editor which]
+                      (let [cwd (files/parent (-> @editor :info :path))
+                            settingsfn ({:local (local-settings cwd) :global (global-settings)} which)]
+                        (if-not (files/exists? settingsfn)
+                          (files/save settingsfn SETTINGS_TEMPLATE))
+                        (cmd/exec! :open-path settingsfn)
+                        (if-let [edit (first (pool/by-path settingsfn))]
+                          (ed/set-mode edit "application/json")))))
+
 (object/object* ::tex-lang
                 :tags #{:tex.lang}
                 :behaviors [::eval! ::sync-backward]
@@ -177,3 +240,15 @@
               :exec (fn []
                       (when-let [ed (pool/last-active)]
                         (object/raise ed :sync-forward)))})
+
+(cmd/command {:command :litex-edit-global
+              :desc "LiTeX: Edit global LaTeX compilation settings"
+              :exec (fn []
+                      (when-let [ed (pool/last-active)]
+                        (object/raise ed :edit-settings :global)))})
+
+(cmd/command {:command :litex-edit-local
+              :desc "LiTeX: Edit local LaTeX compilation settings"
+              :exec (fn []
+                      (when-let [ed (pool/last-active)]
+                        (object/raise ed :edit-settings :local)))})

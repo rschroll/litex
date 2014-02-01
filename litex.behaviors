@@ -1,7 +1,7 @@
 {:+ {:app [(:lt.objs.plugins/load-js "litex_compiled.js")
            (:lt.objs.plugins/load-css "css/litex-viewer.css")]
-     :editor.latex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward]
-     :editor.bibtex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward]
+     :editor.latex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward :lt.plugins.litex/edit-settings]
+     :editor.bibtex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward :lt.plugins.litex/edit-settings]
      :files [(:lt.objs.files/file-types [{:name "BibTeX" :exts [:bib] :mime "application/x-bibtex" :tags [:editor.bibtex]}])]
      :latex.lang [:lt.plugins.litex/eval!]
      }}
