@@ -41,24 +41,28 @@
                               (exitfunc error stdout stderr)
                               (run-commands commands cwd exitfunc :accout stdout))))))))
 
-(defn get-config-from-settings [editor which]
-  (let [path (-> @editor :info :path)
-        settings (get-settings which (files/parent path))
-        fullfilename (ensure-absolute (or (get settings "filename") path) (files/parent path))
-        filename (files/basename fullfilename)
-        cwd (files/parent fullfilename)
-        commands (or (COMMANDS (settings "commands")) (settings "commands"))
+(defn get-config-from-settings [path which]
+  (let [settings (get-settings which (files/parent path))
+        fullfilename (ensure-absolute (or (get settings "filename") path) (files/parent path))]
+    (if-not (some #{(files/ext fullfilename)} ["tex" "latex"])
+      (let [last-tex-file (:last-tex-file @tex-lang)]
+        (if last-tex-file
+          (get-config-from-settings last-tex-file which)
+          nil))
+      (let [filename (files/basename fullfilename)
+            cwd (files/parent fullfilename)
+            commands (or (COMMANDS (settings "commands")) (settings "commands"))
 
-        pathmap (fn [s]
-                  (clojure/string.replace s #"%[fpbde%]"
-                                          #((keyword %1) {:%f filename
-                                                          :%p fullfilename
-                                                          :%b (files/without-ext filename)
-                                                          :%d cwd
-                                                          :%e (files/ext filename)
-                                                          :%% "%"})))
-        pdfname (ensure-absolute (pathmap (settings "outputname")) cwd)]
-    {:commands (map pathmap commands) :cwd cwd :pdfname pdfname}))
+            pathmap (fn [s]
+                      (clojure/string.replace s #"%[fpbde%]"
+                                              #((keyword %1) {:%f filename
+                                                              :%p fullfilename
+                                                              :%b (files/without-ext filename)
+                                                              :%d cwd
+                                                              :%e (files/ext filename)
+                                                              :%% "%"})))
+            pdfname (ensure-absolute (pathmap (settings "outputname")) cwd)]
+        {:commands (map pathmap commands) :cwd cwd :texname fullfilename :pdfname pdfname}))))
 
 (defn run-commands-to-client [connection-command editor commands cwd pdfname render?]
   (let [info (:info @editor)
@@ -116,7 +120,8 @@
 (behavior ::eval!
           :triggers #{:eval!}
           :reaction (fn [this which editor]
-                      (let [{:keys [commands cwd pdfname]} (get-config-from-settings editor which)]
+                      (when-let [{:keys [commands cwd texname pdfname]} (get-config-from-settings (-> @editor :info :path) which)]
+                        (object/merge! tex-lang {:last-tex-file texname})
                         (run-commands-to-client :editor.eval.tex editor commands cwd pdfname false))))
 
 (behavior ::sync-forward
@@ -129,8 +134,8 @@
                                           ;; This silliness is to avoid running get-config-from-settings
                                           ;; if we don't need the result.
                                           [(fn [] @editor)
-                                           #(get-config-from-settings editor "file")
-                                           #(get-config-from-settings editor "project")])]
+                                           #(get-config-from-settings (-> @editor :info :path) "file")
+                                           #(get-config-from-settings (-> @editor :info :path) "project")])]
                         (if pdfname
                           (run-commands-to-client :litex.forward-sync editor
                                                   [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":"
@@ -159,7 +164,8 @@
 (object/object* ::tex-lang
                 :tags #{:tex.lang}
                 :behaviors [::eval! ::sync-backward]
-                :triggers #{:eval! :sync-backward})
+                :triggers #{:eval! :sync-backward}
+                :last-tex-file nil)
 
 (def tex-lang (object/create ::tex-lang))
 
