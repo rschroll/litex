@@ -88,7 +88,10 @@
 
 (defn load-settings [path]
   (let [file (files/open-sync path)]
-    (js->clj (js/JSON.parse (:content file)))))
+    (try
+      (js->clj (js/JSON.parse (:content file)))
+      (catch js/Error e
+        (js/console.log (str "Error parsing " path ":\n  " e "\nIgnoring this file."))))))
 
 (defn get-settings [which cwd]
   (apply merge (map #(get % which) [DEFAULT_SETTINGS
