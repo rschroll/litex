@@ -1,4 +1,4 @@
-;; Copyright 2013 Kodowa INc and 2014 Robert Schroll
+;; Copyright 2013 Kodowa Inc and 2014 Robert Schroll
 ;; This file is part of LiTeX ad is distributed under the terms of the GPLv3.
 ;; This file derives from src/lt/objs/browser.cljs in Light Table.
 
@@ -145,19 +145,19 @@
 ;;*********************************************************
 
 (behavior ::destroy-on-close
-                  :triggers #{:close}
-                  :reaction (fn [this]
-                              (object/raise this :inactive)
-                              (object/destroy! this)))
+          :triggers #{:close}
+          :reaction (fn [this]
+                      (object/raise this :inactive)
+                      (object/destroy! this)))
 
 (behavior ::rem-client
-                  :triggers #{:destroy}
-                  :reaction (fn [this]
-                              (when (= (ctx/->obj :global.browser) this)
-                                (ctx/out! :global.browser))
-                              (when-let [b (first (remove #{this} (object/by-tag :browser)))]
-                                (ctx/in! :global.browser b))
-                              (clients/rem! (:client @this))))
+          :triggers #{:destroy}
+          :reaction (fn [this]
+                      (when (= (ctx/->obj :global.browser) this)
+                        (ctx/out! :global.browser))
+                      (when-let [b (first (remove #{this} (object/by-tag :browser)))]
+                        (ctx/in! :global.browser b))
+                      (clients/rem! (:client @this))))
 
 (behavior ::render-pdf
           :triggers #{:set-pdf}
@@ -287,51 +287,51 @@
                       (object/merge! (:client @this) {:name loc})))
 
 (behavior ::set-active
-                  :triggers #{:active :show}
-                  :reaction (fn [this]
-                              (ctx/in! :global.browser this)))
+          :triggers #{:active :show}
+          :reaction (fn [this]
+                      (ctx/in! :global.browser this)))
 
 (behavior ::active-context
-                  :triggers #{:active :show}
-                  :reaction (fn [this]
-                              (ctx/in! :browser this)))
+          :triggers #{:active :show}
+          :reaction (fn [this]
+                      (ctx/in! :browser this)))
 
 (behavior ::focus-on-show
-                  :triggers #{:show}
-                  :reaction (fn [this]
-                              (object/raise this :focus!)))
+          :triggers #{:show}
+          :reaction (fn [this]
+                      (object/raise this :focus!)))
 
 (behavior ::inactive-context
-                  :triggers #{:inactive}
-                  :reaction (fn [this]
-                              (ctx/out! :browser)))
+          :triggers #{:inactive}
+          :reaction (fn [this]
+                      (ctx/out! :browser)))
 
 (behavior ::handle-send!
-                  :triggers #{:send!}
-                  :reaction (fn [this msg]
-                              (object/raise this (keyword (str (:command msg) "!")) msg)
-                              ))
+          :triggers #{:send!}
+          :reaction (fn [this msg]
+                      (object/raise this (keyword (str (:command msg) "!")) msg)
+                      ))
 
 (behavior ::handle-close!
-                  :triggers #{:client.close!}
-                  :reaction (fn [this]
-                              (object/raise (:frame @this) :close)
-                              (clients/rem! this)))
+          :triggers #{:client.close!}
+          :reaction (fn [this]
+                      (object/raise (:frame @this) :close)
+                      (clients/rem! this)))
 
 (behavior ::tex-eval
-                  :triggers #{:editor.eval.tex!}
-                  :reaction (fn [this msg]
-                              (let [data (:data msg)
-                                    log-viewer (dom/$ :pre#log-viewer (object/->content this))
-                                    viewer (:frame @this)]
-                                (if-not (:error data)
-                                  (do
-                                    (object/raise viewer :set-pdf (:pdfname data))
-                                    (object/raise (:editor data) :sync-forward)
-                                    (object/raise viewer :hide-log!))
-                                  (object/raise viewer :show-log!))
-                                (set! (.-innerText log-viewer) (str (:stdout data) (:stderr data)))
-                                (set! (.-scrollTop log-viewer) (- (.-scrollHeight log-viewer) (.-clientHeight log-viewer))))))
+          :triggers #{:editor.eval.tex!}
+          :reaction (fn [this msg]
+                      (let [data (:data msg)
+                            log-viewer (dom/$ :pre#log-viewer (object/->content this))
+                            viewer (:frame @this)]
+                        (if-not (:error data)
+                          (do
+                            (object/raise viewer :set-pdf (:pdfname data))
+                            (object/raise (:editor data) :sync-forward)
+                            (object/raise viewer :hide-log!))
+                          (object/raise viewer :show-log!))
+                        (set! (.-innerText log-viewer) (str (:stdout data) (:stderr data)))
+                        (set! (.-scrollTop log-viewer) (- (.-scrollHeight log-viewer) (.-clientHeight log-viewer))))))
 
 (behavior ::forward-sync
           :triggers #{:litex.forward-sync!}

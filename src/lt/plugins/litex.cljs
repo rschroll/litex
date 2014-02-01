@@ -1,4 +1,4 @@
-;; Copyright 2013 Kodowa INc and 2014 Robert Schroll
+;; Copyright 2013 Kodowa Inc and 2014 Robert Schroll
 ;; This file is part of LiTeX ad is distributed under the terms of the GPLv3.
 ;; This file derives from the HTML for Light Table plugin.
 
@@ -201,7 +201,7 @@
 (behavior ::sync-backward
           :triggers #{:sync-backward}
           :reaction (fn [this cwd pdfname pagenum clickX clickY]
-                      (run-commands [(str"synctex edit -o \"" pagenum ":" clickX ":" clickY ":" pdfname "\"")]
+                      (run-commands [(str "synctex edit -o \"" pagenum ":" clickX ":" clickY ":" pdfname "\"")]
                                     cwd
                                     (fn [error stdout stderr]
                                       (if-not error
