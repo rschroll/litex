@@ -119,6 +119,7 @@
                             ::hide-log!
                             ::image-click!
                             ::image-load!
+                            ::mouse-wheel!
                             ::init!
                             ::set-client-name
                             ::set-active
@@ -263,10 +264,20 @@
                           (object/raise lt.plugins.litex/tex-lang :sync-backward
                                         cwd pdfname pagenum clickX clickY)))))
 
+(behavior ::mouse-wheel!
+          :triggers #{:mouse-wheel!}
+          :reaction (fn [this event]
+                      (if (and (.-altKey event) (not (.-shiftKey event)) (not= (.-wheelDeltaY event) 0))
+                        (do
+                          (.preventDefault event)
+                          (object/raise this (if (< (.-wheelDeltaY event) 0) :zoom-out! :zoom-in!))))))
+
 (behavior ::init!
-                  :triggers #{:init}
-                  :reaction (fn [this]
-                              nil))
+          :triggers #{:init}
+          :reaction (fn [this]
+                      (let [pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))]
+                        (set! (.-onmousewheel pdf-viewer) (fn [event]
+                                                            (object/raise this :mouse-wheel! event))))))
 
 (behavior ::set-client-name
           :triggers #{:set-name}
