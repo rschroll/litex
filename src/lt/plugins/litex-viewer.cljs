@@ -45,12 +45,19 @@
   :click (fn []
            (object/raise this :hide-log!)))
 
-(defui pdfimg [viewer src]
-  [:img {:src src}]
+(defui pdfimg [page viewer]
+  [:img {:class page}]
   :click (fn [event]
-           (object/raise viewer :image-click! event))
-  :load (fn [evemt]
-          (object/raise viewer :image-load! event)))
+           (object/raise viewer :image-click! event)))
+
+(defn make-page [str viewer]
+  (let [re (js/RegExp. "^Page *(\\d*) size: (\\d*) x (\\d*)")
+        match (.exec re str)]
+    (if match
+      (let [page (js/parseInt (aget match 1))
+            width (js/parseFloat (aget match 2))
+            height (js/parseFloat (aget match 3))]
+        [page {:width width :height height :img (pdfimg page viewer)}]))))
 
 (defn kwpairf [str]
   (let [[k v] (.split str ":")]
@@ -106,19 +113,18 @@
                 :restore-top nil
                 :restore-left nil
                 :sync-msg nil
-                :rendering false
-                :loading-count 0
+                :laying-out false
                 :behaviors [::destroy-on-close
                             ::rem-client
-                            ::render-pdf
-                            ::render-done
+                            ::layout-pdf
+                            ::layout-done
+                            ::render-page
                             ::zoom-in!
                             ::zoom-out!
                             ::set-zoom!
                             ::show-log!
                             ::hide-log!
                             ::image-click!
-                            ::image-load!
                             ::mouse-wheel!
                             ::init!
                             ::set-client-name
@@ -159,52 +165,56 @@
                         (ctx/in! :global.browser b))
                       (clients/rem! (:client @this))))
 
-(behavior ::render-pdf
+(behavior ::layout-pdf
           :triggers #{:set-pdf}
           :reaction (fn [this path]
-                      (object/merge! this {:rendering true})
+                      (object/merge! this {:laying-out true})
                       (let [randstr (.toString (rand-int 1679616) 36)
                             filename (files/basename path)
                             basename (files/without-ext filename)
-                            dirname (files/parent path)
-                            imgdir (files/join dirname (str ".img." filename))]
-                        (if (files/exists? imgdir)
-                          (files/delete! imgdir))
-                        (files/mkdir imgdir)
+                            dirname (files/parent path)]
                         (object/raise this :set-name filename)
                         (object/merge! this {:pdfname path})
-                        (lt.plugins.litex/run-commands [(str "pdftoppm -png \"" basename ".pdf\" \".img." filename "/" randstr "\"")]
+                        (lt.plugins.litex/run-commands [(str "pdfinfo -l -1 \"" basename ".pdf\"")]
                                                        dirname
                                                        (fn [error stdout stderr]
-                                                         (object/raise this :render-done error stdout stderr imgdir))))))
+                                                         (object/raise this :structure-done error stdout stderr))))))
 
-(behavior ::render-done
-          :triggers #{:render-done}
-          :reaction (fn [this error stdout stderr imgdir]
+(behavior ::layout-done
+          :triggers #{:structure-done}
+          :reaction (fn [this error stdout stderr]
                       (let [pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
                             sync-box   (dom/$ :div#sync-box   (object/->content this))
                             scroll-top (.-scrollTop pdf-viewer)
-                            scroll-left (.-scrollLeft pdf-viewer)]
+                            scroll-left (.-scrollLeft pdf-viewer)
+                            pages (into {} (remove nil? (map #(make-page % this) (.split stdout "\n"))))]
                         (while (not (= sync-box (first (dom/children pdf-viewer))))
                           (dom/remove (first (dom/children pdf-viewer))))
-                        (doseq [f (files/ls imgdir)]
-                          (dom/before sync-box (pdfimg this (str "file://" (files/join imgdir f)))))
-                        (object/raise this :set-zoom!)
-                        (object/merge! this {:restore-top scroll-top
+                        (doseq [n (sort (keys pages))]
+                          (dom/before sync-box (:img (pages n))))
+                        (object/merge! this {:pages pages
+                                             :restore-top scroll-top
                                              :restore-left scroll-left
-                                             :loading-count (- (count (dom/children pdf-viewer)) 1)}))))
+                                             :laying-out false})
+                        (object/raise this :set-zoom!)
+                        (object/raise this :render-page 1)
+                        (when-let [sync-msg (:sync-msg @this)]
+                          (object/raise (:client @this) :litex.forward-sync! sync-msg)
+                          (object/merge! this {:sync-msg nil})))))
 
-(behavior ::image-load!
-          :triggers #{:image-load!}
-          :reaction (fn [this event]
-                      (let [count (- (:loading-count @this) 1)]
-                        (object/merge! this {:loading-count count})
-                        (if (= count 0)
-                          (do
-                            (object/merge! this {:rendering false})
-                            (when-let [sync-msg (:sync-msg @this)]
-                              (object/raise (:client @this) :litex.forward-sync! sync-msg)
-                              (object/merge! this {:sync-msg nil})))))))
+(behavior ::render-page
+          :triggers #{:render-page}
+          :reaction (fn [this pagenum]
+                      (if (<= pagenum (count (:pages @this)))
+                        (lt.plugins.litex/run-commands [(str "pdftoppm -f " pagenum " -l " pagenum
+                                                             " -png \"" (:pdfname @this) "\"")]
+                                                       (files/parent (:pdfname @this))
+                                                       (fn [error stdout stderr]
+                                                         (if-not error
+                                                           (set! (.-src (:img ((:pages @this) pagenum)))
+                                                                 (str "data:image/png;base64," stdout)))
+                                                         (object/raise this :render-page (+ 1 pagenum)))
+                                                       :encoding "base64"))))
 
 (behavior ::zoom-in!
           :triggers #{:zoom-in!}
@@ -228,8 +238,10 @@
                             [x y] (center-point pdf-viewer)
                             new-zoom (or nzoom zoom)]
                         (object/merge! this {:zoom new-zoom})
-                        (doseq [elem (dom/children pdf-viewer)]
-                          (dom/css elem {:zoom new-zoom}))
+                        (doseq [p (vals (:pages @this))]
+                          (dom/css (:img p) {:width (* (:width p) new-zoom)
+                                             :height (* (:height p) new-zoom)
+                                             :margin (* 20 new-zoom)}))
                         (set-center-point pdf-viewer (map #(* % (/ new-zoom zoom)) [x y])))))
 
 (defn center-point [elem]
@@ -255,10 +267,9 @@
           :reaction (fn [this event]
                       (if (.-ctrlKey event)
                         (let [zoom (:zoom @this)
-                              scale (/ 150 72)
-                              clickX (/ (- (/ (js/parseFloat (.-offsetX event)) zoom) 2) scale)
-                              clickY (/ (- (/ (js/parseFloat (.-offsetY event)) zoom) 2) scale)
-                              pagenum (js/parseInt (last (.split (-> event .-srcElement .-src) "-")))
+                              clickX (- (/ (js/parseFloat (.-offsetX event)) zoom) 2)
+                              clickY (- (/ (js/parseFloat (.-offsetY event)) zoom) 2)
+                              pagenum (js/parseInt (-> event .-srcElement .-classList))
                               cwd (files/parent (:pdfname @this))
                               pdfname (files/basename (:pdfname @this))]
                           (object/raise lt.plugins.litex/tex-lang :sync-backward
@@ -341,7 +352,7 @@
                         (if (not= pdfname (:pdfname @viewer))
                           (object/raise viewer :set-pdf pdfname))  ;; Starts rendering
 
-                        (if (:rendering @viewer)
+                        (if (:laying-out @viewer)
                           (object/merge! viewer {:sync-msg msg})
                           (let [data (:data msg)
                                 pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
@@ -352,8 +363,9 @@
                             (object/merge! viewer {:restore-top nil :restore-left nil})
                             (set! (.-offsetHeight pdf-viewer) (.-offsetHeight pdf-viewer))
                             (if output-split  ;; locs is lazy?
-                              (let [locs (map #(pdf-to-elem pdf-viewer (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
-                                    zoom (:zoom @(:frame @this))
+                              (let [zoom (:zoom @(:frame @this))
+                                    locs (map #(pdf-to-elem pdf-viewer zoom
+                                                            (into {} (remove nil? (map kwpairf (.split % "\n"))))) output-split)
                                     ;; Need to find bounding box including all boxes in locs
                                     bbleft (apply min (map :h locs))
                                     bbtop (apply min (map #(- (:v %) (:H %)) locs))
@@ -377,13 +389,13 @@
                                 ;; outside of its bounds.
                                 (set! (.-scrollLeft pdf-viewer)
                                       (cond
-                                       (and (>= (* bbleft zoom) vleft) (<= (* bbright zoom) vright)) vleft
-                                       (<= (* bbwidth zoom) vwidth) (+ (* bbleft zoom) (/ (- (* bbwidth zoom) vwidth) 2))
-                                       :else (* bbleft zoom)))
+                                       (and (>= bbleft vleft) (<= bbright vright)) vleft
+                                       (<= bbwidth vwidth) (+ bbleft (/ (- bbwidth vwidth) 2))
+                                       :else bbleft))
                                 (set! (.-scrollTop pdf-viewer)
                                       (cond
-                                       (and (>= (* bbtop zoom) vtop) (<= (* bbbottom zoom) vbottom)) vtop
-                                       (<= (* bbheight zoom) vheight) (+ (* bbtop zoom) (/ (- (* bbheight zoom) vheight) 2))
+                                       (and (>= bbtop vtop) (<= bbbottom vbottom)) vtop
+                                       (<= bbheight vheight) (+ bbtop (/ (- bbheight vheight) 2))
                                        :else (* bbtop zoom)))
 
                                 (dom/css sync-box {:left (str bbleft "px")
@@ -393,14 +405,13 @@
                                 (dom/add-class sync-box :animate))
                               (js/console.log "No synctex results!")))))))
 
-(defn pdf-to-elem [elem loc]
+(defn pdf-to-elem [elem zoom loc]
   (let [{:keys [h v W H Page]} loc
-        img (nth (dom/children elem) (- Page 1))
-        scale (/ 150 72)]
-    {:h (+ (* h scale) (.-offsetLeft img) 2)  ;; 2 for border, since offset*
-     :v (+ (* v scale) (.-offsetTop img) 2)   ;; measures to outside of border
-     :W (* W scale)
-     :H (* H scale)}))
+        img (nth (dom/children elem) (- Page 1))]
+    {:h (+ (* h zoom) (.-offsetLeft img) 2)  ;; 2 for border, since offset*
+     :v (+ (* v zoom) (.-offsetTop img) 2)   ;; measures to outside of border
+     :W (* W zoom)
+     :H (* H zoom)}))
 
 (cmd/command {:command :add-litex-viewer-tab
               :desc "LiTeX: Add PDF viewer for LaTeX document"

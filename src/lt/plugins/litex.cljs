@@ -15,9 +15,11 @@
   (:require-macros [lt.macros :refer [behavior defui]]))
 
 (def _exec (.-exec (js/require "child_process")))
-(defn exec [command cwd exitfunc]
+(defn exec [command cwd encoding exitfunc]
   (_exec command (js-obj "cwd" cwd
+                         "encoding" encoding
                          "env" (proc/merge-env nil)
+                         "maxBuffer" (* 1024 1024)
                          "windowsVerbatimArguments" (when (= js/process.platform "win32") true))
          exitfunc))
 
@@ -30,16 +32,16 @@
     path
     (files/join dir path)))
 
-(defn run-commands [commands cwd exitfunc & {:keys [accout] :or {accout ""}}]
+(defn run-commands [commands cwd exitfunc & {:keys [accout encoding] :or {accout "" encoding "utf8"}}]
   (if (empty? commands)
     (exitfunc nil accout "")
     (let [command (first commands)
           commands (rest commands)]
-      (exec command cwd (fn [error stdout stderr]
-                          (let [stdout (str accout stdout)]
-                            (if error
-                              (exitfunc error stdout stderr)
-                              (run-commands commands cwd exitfunc :accout stdout))))))))
+      (exec command cwd encoding (fn [error stdout stderr]
+                                   (let [stdout (str accout stdout)]
+                                     (if error
+                                       (exitfunc error stdout stderr)
+                                       (run-commands commands cwd exitfunc :accout stdout :encoding encoding))))))))
 
 (defn get-config-from-settings [path which]
   (let [settings (get-settings which (files/parent path))

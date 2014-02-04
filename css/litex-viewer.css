@@ -40,8 +40,9 @@
 }
 #pdf-viewer img {
   display: block;
-  margin: 20px;
   border: 2px solid black;
+  box-sizing: content-box; /* Needed due to Light Table CSS */
+  background: white;
 }
 #log-viewer {
   position: absolute;
