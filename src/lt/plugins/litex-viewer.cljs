@@ -57,7 +57,7 @@
       (let [page (js/parseInt (aget match 1))
             width (js/parseFloat (aget match 2))
             height (js/parseFloat (aget match 3))]
-        [page {:width width :height height :img (pdfimg page viewer)}]))))
+        [page {:page page :width width :height height :img (pdfimg page viewer) :zoom 0}]))))
 
 (defn kwpairf [str]
   (let [[k v] (.split str ":")]
@@ -97,10 +97,12 @@
                 :restore-left nil
                 :sync-msg nil
                 :laying-out false
+                :rendering false
                 :behaviors [::destroy-on-close
                             ::rem-client
                             ::layout-pdf
                             ::layout-done
+                            ::render-pages
                             ::render-page
                             ::zoom-in!
                             ::zoom-out!
@@ -173,24 +175,51 @@
                                              :restore-left scroll-left
                                              :laying-out false})
                         (object/raise this :set-zoom!)
-                        (object/raise this :render-page 1)
+                        ;; Usually this will trigger a scroll and a render, but sometimes not.  To be sure:
+                        (object/raise this :render-start)
                         (when-let [sync-msg (:sync-msg @this)]
                           (object/raise (:client @this) :litex.forward-sync! sync-msg)
                           (object/merge! this {:sync-msg nil})))))
 
+(behavior ::render-pages
+          :triggers #{:render-start}
+          :reaction (fn [this]
+                      (if-not (:rendering @this)
+                        (do
+                          (object/merge! this {:rendering true})
+                          (object/raise this :render-page)))))
+
 (behavior ::render-page
           :triggers #{:render-page}
-          :reaction (fn [this pagenum]
-                      (if (<= pagenum (count (:pages @this)))
-                        (lt.plugins.litex/run-commands [(str "pdftoppm -f " pagenum " -l " pagenum
-                                                             " -png \"" (:pdfname @this) "\"")]
-                                                       (files/parent (:pdfname @this))
-                                                       (fn [error stdout stderr]
-                                                         (if-not error
-                                                           (set! (.-src (:img ((:pages @this) pagenum)))
-                                                                 (str "data:image/png;base64," stdout)))
-                                                         (object/raise this :render-page (+ 1 pagenum)))
-                                                       :encoding "base64"))))
+          :reaction (fn [this]
+                      (let [pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
+                            viewtop (.-scrollTop pdf-viewer)
+                            viewbottom (+ (.-clientHeight pdf-viewer) viewtop)
+                            pages (:pages @this)
+                            visible-pages (filter (fn [page]
+                                                    (let [img (:img page)
+                                                          imgtop (.-offsetTop img)
+                                                          imgbottom (+ (.-offsetHeight img) imgtop)]
+                                                      (and (>= imgbottom viewtop) (<= imgtop viewbottom))))
+                                                  (vals pages))
+                            zoom (:zoom @this)
+                            render-page (first (filter #(< (:zoom %) zoom)
+                                                       (lazy-cat visible-pages [(pages (+ (:page (last visible-pages)) 1))
+                                                                                (pages (- (:page (first visible-pages)) 1))])))]
+                       (if render-page
+                          (let [render-page (assoc render-page :zoom zoom)
+                                pagenum (:page render-page)]
+                            (object/merge! this {:pages (assoc pages pagenum render-page)})
+                            (lt.plugins.litex/run-commands [(str "pdftoppm -f " pagenum " -l " pagenum " -r " (* 72 zoom)
+                                                                 " -png \"" (:pdfname @this) "\"")]
+                                                           (files/parent (:pdfname @this))
+                                                           (fn [error stdout stderr]
+                                                             (if-not error
+                                                               (set! (.-src (:img render-page))
+                                                                     (str "data:image/png;base64," stdout)))
+                                                             (object/raise this :render-page))
+                                                           :encoding "base64"))
+                          (object/merge! this {:rendering false})))))
 
 (behavior ::zoom-in!
           :triggers #{:zoom-in!}
@@ -218,6 +247,7 @@
                           (dom/css (:img p) {:width (* (:width p) new-zoom)
                                              :height (* (:height p) new-zoom)
                                              :margin (* 20 new-zoom)}))
+                        ;; This will cause a scroll event, triggering rendering.
                         (set-center-point pdf-viewer (map #(* % (/ new-zoom zoom)) [x y])))))
 
 (defn center-point [elem]
@@ -264,7 +294,9 @@
           :reaction (fn [this]
                       (let [pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))]
                         (set! (.-onmousewheel pdf-viewer) (fn [event]
-                                                            (object/raise this :mouse-wheel! event))))))
+                                                            (object/raise this :mouse-wheel! event)))
+                        (set! (.-onscroll pdf-viewer) (fn [event]
+                                                        (object/raise this :render-start))))))
 
 (behavior ::set-client-name
           :triggers #{:set-name}
@@ -358,6 +390,7 @@
                                        (and (>= bbtop vtop) (<= bbbottom vbottom)) vtop
                                        (<= bbheight vheight) (+ bbtop (/ (- bbheight vheight) 2))
                                        :else (* bbtop zoom)))
+                                ;; This will cause a scroll event, which triggers rendering.
 
                                 (dom/css sync-box {:left (str bbleft "px")
                                                    :top (str bbtop "px")
