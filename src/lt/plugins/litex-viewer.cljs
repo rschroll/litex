@@ -246,7 +246,7 @@
                         (doseq [p (vals (:pages @this))]
                           (dom/css (:img p) {:width (* (:width p) new-zoom)
                                              :height (* (:height p) new-zoom)
-                                             :margin (* 20 new-zoom)}))
+                                             :margin (str (* 20 new-zoom) "px auto")}))
                         ;; This will cause a scroll event, triggering rendering.
                         (set-center-point pdf-viewer (map #(* % (/ new-zoom zoom)) [x y])))))
 
