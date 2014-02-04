@@ -63,35 +63,22 @@
   (let [[k v] (.split str ":")]
     (if v [(keyword k) (js/parseFloat v)] nil)))
 
-(defn browser-id [this]
-  (str "browser" (object/->id this)))
-
-(defn to-frame [this]
-  (let [id (if (string? this)
-             this
-             (browser-id this))]
-    (aget js/window.frames id)))
-
-(defn handle-cb [cbid command data]
-  (object/raise clients/clients :message [cbid command data]))
-
 
 (defn connect-client [this]
-  (clients/handle-connection! {:name (:urlvalue @this)
+  (clients/handle-connection! {:name "PDF Viewer"
                                :frame this
-                               :frame-id (browser-id this)
-                               :tags [:zframe.client]
+                               :tags [:litex.client]
                                :behaviors [::tex-eval
                                            ::forward-sync
                                            ::handle-send!
                                            ::handle-close!]
                                :commands #{:editor.eval.tex
                                            :litex.forward-sync}
-                               :type :frame}))
+                               :type "LiTeX PDF Viewer"}))
 
 
 (defn add []
-  (let [browser (object/create ::browser)]
+  (let [browser (object/create ::viewer)]
     (tabs/add! browser)
     (tabs/active! browser)
     browser))
@@ -101,13 +88,9 @@
 ;; Object
 ;;*********************************************************
 
-(object/object* ::browser
-                :name "browser"
+(object/object* ::viewer
+                :name "PDF Viewer"
                 :tags #{:viewer}
-                :history []
-                :history-pos -1
-                :url "about:blank"
-                :urlvalue "about:blank"
                 :zoom 1
                 :zoom-factor 1.25
                 :restore-top nil
@@ -128,10 +111,7 @@
                             ::mouse-wheel!
                             ::init!
                             ::set-client-name
-                            ::set-active
-                            ::active-context
-                            ::focus-on-show
-                            ::inactive-context]
+                            ::focus-on-show]
                 :init (fn [this]
                         (object/merge! this {:client (connect-client this)})
                         [:div#litex-viewer.cm-s-default.hide-log
@@ -159,10 +139,6 @@
 (behavior ::rem-client
           :triggers #{:destroy}
           :reaction (fn [this]
-                      (when (= (ctx/->obj :global.browser) this)
-                        (ctx/out! :global.browser))
-                      (when-let [b (first (remove #{this} (object/by-tag :browser)))]
-                        (ctx/in! :global.browser b))
                       (clients/rem! (:client @this))))
 
 (behavior ::layout-pdf
@@ -295,27 +271,12 @@
           :reaction (fn [this title]
                       (object/merge! this {:name title})
                       (tabs/refresh! this)
-                      (object/merge! (:client @this) {:name loc})))
-
-(behavior ::set-active
-          :triggers #{:active :show}
-          :reaction (fn [this]
-                      (ctx/in! :global.browser this)))
-
-(behavior ::active-context
-          :triggers #{:active :show}
-          :reaction (fn [this]
-                      (ctx/in! :browser this)))
+                      (object/merge! (:client @this) {:name title})))
 
 (behavior ::focus-on-show
           :triggers #{:show}
           :reaction (fn [this]
                       (object/raise this :focus!)))
-
-(behavior ::inactive-context
-          :triggers #{:inactive}
-          :reaction (fn [this]
-                      (ctx/out! :browser)))
 
 (behavior ::handle-send!
           :triggers #{:send!}
