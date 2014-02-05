@@ -20,14 +20,16 @@ clone this repository into your plugins folder:
 You may need to reload your behaviors or restart Light Table to get
 everything loaded properly.
 
-You'll need TeX installed, of course.  At the moment, you also need
-pdftoppm, a utility from [Poppler][3] or [Xpdf][4], to create
-bitmaps of the pages for the PDF viewer.  This should be in the
-repositories of any Linux distribution, if not already installed.  I
-don't know what the situation is for Mac or Windows.
+You'll need TeX installed, of course.  For the PDF viewer, you also need
+the command-line programs `pdftoppm` and `pdfinfo`, part of [Poppler][3]
+or [Xpdf][4].  Linux users should find this in their repositories, if
+they aren't already installed.  (On Debian-based systems, they're in the
+*poppler-utils* package.)  A version for Windows is available on the
+[Xpdf download page][5].  I'm not sure what the situation is for Macs.
 
 [3]: http://poppler.freedesktop.org/
 [4]: http://www.foolabs.com/xpdf/home.html
+[5]: http://www.foolabs.com/xpdf/download.html
 
 Usage
 -----
@@ -100,11 +102,11 @@ means you should call `latex` with the `-halt-on-error` option.
 All commands are run from the directory containing *filename*.  If
 you're doing something that requires commands run in several different
 directories, you're probably better off using makefiles or something
-like [latexmk][5] or [rubber][6].  Just set `"commands": ["make"]`, and
+like [latexmk][6] or [rubber][7].  Just set `"commands": ["make"]`, and
 you should be all set.
 
-[5]: http://users.phys.psu.edu/~collins/software/latexmk-jcc/
-[6]: https://launchpad.net/rubber/
+[6]: http://users.phys.psu.edu/~collins/software/latexmk-jcc/
+[7]: https://launchpad.net/rubber/
 
 License
 -------
