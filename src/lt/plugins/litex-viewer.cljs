@@ -77,11 +77,18 @@
                                :type "LiTeX PDF Viewer"}))
 
 
+(defn new-tabset []
+  (let [ts (tabs/spawn-tabset)]
+    (tabs/equalize-tabset-widths)
+    ts))
+
 (defn add []
-  (let [browser (object/create ::viewer)]
-    (tabs/add! browser)
-    (tabs/active! browser)
-    browser))
+  (let [viewer (object/create ::viewer)
+        tabset (tabs/in-tab? (pool/last-active))
+        viewerts (or (tabs/next-tabset tabset) (tabs/prev-tabset tabset) (new-tabset))]
+    (tabs/add! viewer viewerts)
+    (tabs/active! viewer)
+    viewer))
 
 
 ;;*********************************************************
