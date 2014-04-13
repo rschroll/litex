@@ -66,8 +66,8 @@ project with several TeX files.
 * *outputname*: The name of the PDF file created by this command.  The
 substitution patterns may be used, and the default is `"%b.pdf"`.
 
-Pattern | Substiution value
-:------:|:-----------------
+Pattern | Substitution value
+:------:|:------------------
   `%f`  | name of file
   `%p`  | full path of file
   `%d`  | directory of file

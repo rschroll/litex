@@ -157,8 +157,8 @@
   }
 }
 
-// Pattern | Substiution value
-// --------|------------------
+// Pattern | Substitution value
+// --------|-------------------
 //    %f   | name of file
 //    %p   | full path of file
 //    %d   | directory of file
