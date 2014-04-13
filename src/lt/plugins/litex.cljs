@@ -53,7 +53,12 @@
           nil))
       (let [filename (files/basename fullfilename)
             cwd (files/parent fullfilename)
-            commands (or (COMMANDS (settings "commands")) (settings "commands"))
+            commands (settings "commands")
+            commands (if (string? commands)
+                       (or (COMMANDS commands)
+                           (throw (str "Unknown command: \"" commands "\".  "
+                                       "Remember, a custom command should be a list of strings.")))
+                       commands)
 
             pathmap (fn [s]
                       (clojure/string.replace s #"%[fpbde%]"
