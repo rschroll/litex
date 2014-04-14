@@ -168,6 +168,7 @@
 (behavior ::layout-done
           :triggers #{:structure-done}
           :reaction (fn [this error stdout stderr]
+                      (if error (throw (str "pdfinfo error: " stderr)))
                       (let [pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
                             sync-box   (dom/$ :div#sync-box   (object/->content this))
                             scroll-top (.-scrollTop pdf-viewer)
@@ -223,7 +224,8 @@
                                                            (fn [error stdout stderr]
                                                              (if-not error
                                                                (set! (.-src (:img render-page))
-                                                                     (str "data:image/png;base64," stdout)))
+                                                                     (str "data:image/png;base64," stdout))
+                                                               (throw (str "pdftoppm error: " (js/window.atob stderr))))
                                                              (object/raise this :render-page))
                                                            :encoding "base64"))
                           (object/merge! this {:rendering false})))))
