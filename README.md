@@ -13,9 +13,9 @@ Install
 LiTeX is available in the plugins repository.  Alternatively, you can
 clone this repository into your plugins folder:
 
- * Linux: `~/.config/LightTable/plugins/`
- * Mac: `~/Library/Application Support/LightTable/plugins/`
- * Windows: `%APPDATALOCAL%\LightTable\plugins\`
+ * Linux: *~/.config/LightTable/plugins/*
+ * Mac: *~/Library/Application Support/LightTable/plugins/*
+ * Windows: *%APPDATALOCAL%\LightTable\plugins\*
 
 You may need to reload your behaviors or restart Light Table to get
 everything loaded properly.
@@ -25,7 +25,9 @@ the command-line programs `pdftoppm` and `pdfinfo`, part of [Poppler][3]
 or [Xpdf][4].  Linux users should find this in their repositories, if
 they aren't already installed.  (On Debian-based systems, they're in the
 *poppler-utils* package.)  A version for Windows is available on the
-[Xpdf download page][5].  I'm not sure what the situation is for Macs.
+[Xpdf download page][5].  The Mac package linked to on that page does
+not contain the pdftoppm binary, but I've heard that `brew install
+poppler` works.
 
 [3]: http://poppler.freedesktop.org/
 [4]: http://www.foolabs.com/xpdf/home.html
