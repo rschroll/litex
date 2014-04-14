@@ -102,7 +102,7 @@
           (js/console.log (str "Error parsing " path ":\n  " e "\nIgnoring this file.")))))))
 
 (defn global-settings []
-  (files/home (files/join ".config" "litexrc")))
+  (files/join (files/parent files/data-path) "litexrc"))
 
 (defn local-settings [cwd]
   (files/join cwd ".litexrc"))

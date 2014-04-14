@@ -75,12 +75,14 @@ Pattern | Substitution value
   `%e`  | file extension
   `%%`  | a percent sign
 
-These settings are read from two JSON-formatted files, first
-*~/.config/litexrc* and then *.litexrc* in the current directory.  The
-commands to edit LiTeX settings will open these files for you.These JSON
-object may have two attributes, `"file"` and `"project"`, each of which
-may have attributes `"filename"`, `"commands"`, and `"outputname"`.  As
-an example:
+These settings are read from two JSON-formatted files, first *litexrc*
+in your configuration directory (*~/.config* on Linux,
+*~/Library/Application Support* on Mac, or *%APPDATALOCAL%* on Windows)
+and then *.litexrc* in the current directory.  The commands to edit
+LiTeX settings will open these files for you.These JSON object may have
+two attributes, `"file"` and `"project"`, each of which may have
+attributes `"filename"`, `"commands"`, and `"outputname"`.  As an
+example:
 ```JSON
 { "file": { "commands": "latex-dvipdf" },
   "project": { "filename": "main.tex",
