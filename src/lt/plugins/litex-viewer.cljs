@@ -6,17 +6,10 @@
   (:require [lt.object :as object]
             [lt.objs.tabs :as tabs]
             [lt.objs.command :as cmd]
-            [lt.objs.console :as console]
             [lt.objs.files :as files]
             [lt.objs.clients :as clients]
-            [lt.objs.context :as ctx]
-            [lt.objs.editor :as editor]
             [lt.objs.editor.pool :as pool]
-            [lt.objs.proc :as proc]
-            [lt.util.dom :as dom]
-            [clojure.string :as string]
-            [crate.core :as crate]
-            [crate.binding :refer [bound subatom]])
+            [lt.util.dom :as dom])
   (:require-macros [lt.macros :refer [behavior defui]]))
 
 (def utils (js-obj))

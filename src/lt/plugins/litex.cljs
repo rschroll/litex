@@ -10,8 +10,7 @@
             [lt.objs.command :as cmd]
             [lt.objs.clients :as clients]
             [lt.objs.files :as files]
-            [lt.objs.proc :as proc]
-            [lt.objs.notifos :as notifos])
+            [lt.objs.proc :as proc])
   (:require-macros [lt.macros :refer [behavior defui]]))
 
 (def _exec (.-exec (js/require "child_process")))
