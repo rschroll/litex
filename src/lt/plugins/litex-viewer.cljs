@@ -247,8 +247,8 @@
                             new-zoom (or nzoom zoom)]
                         (object/merge! this {:zoom new-zoom})
                         (doseq [p (vals (:pages @this))]
-                          (dom/css (:img p) {:width (* (:width p) new-zoom)
-                                             :height (* (:height p) new-zoom)
+                          (dom/css (:img p) {:width (js/Math.ceil (* (:width p) new-zoom))
+                                             :height (js/Math.ceil (* (:height p) new-zoom))
                                              :margin (str (* 20 new-zoom) "px auto")}))
                         ;; This will cause a scroll event, triggering rendering.
                         (set-center-point pdf-viewer (map #(* % (/ new-zoom zoom)) [x y])))))
