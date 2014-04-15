@@ -9,6 +9,7 @@
             [lt.objs.files :as files]
             [lt.objs.clients :as clients]
             [lt.objs.editor.pool :as pool]
+            [lt.objs.platform :as platform]
             [lt.util.dom :as dom])
   (:require-macros [lt.macros :refer [behavior defui]]))
 
@@ -273,7 +274,7 @@
 (behavior ::image-click!
           :triggers #{:image-click!}
           :reaction (fn [this event]
-                      (if (.-ctrlKey event)
+                      (if (or (.-ctrlKey event) (and (platform/mac?) (.-metaKey event)))
                         (let [zoom (:zoom @this)
                               clickX (- (/ (js/parseFloat (.-offsetX event)) zoom) 2)
                               clickY (- (/ (js/parseFloat (.-offsetY event)) zoom) 2)
