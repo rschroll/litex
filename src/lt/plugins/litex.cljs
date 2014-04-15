@@ -212,7 +212,7 @@
                                     (fn [error stdout stderr]
                                       (if-not error
                                         (let [loc (into {} (remove nil? (map kwpair (.split stdout "\n"))))
-                                              filename (#(if (files/absolute? %) % (files/join cwd %)) (:Input loc))
+                                              filename (files/resolve cwd (:Input loc))
                                               line (- (:Line loc) 1)
                                               column (- (:Column loc) 1)]
                                           (cmd/exec! :open-path filename)
