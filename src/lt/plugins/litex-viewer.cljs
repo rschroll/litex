@@ -44,7 +44,7 @@
            (object/raise viewer :image-click! event)))
 
 (defn make-page [str viewer]
-  (let [re (js/RegExp. "^Page *(\\d*) size: (\\d*) x (\\d*)")
+  (let [re (js/RegExp. "^Page *(\\d*) size: ([\\d\\.]*) x ([\\d\\.]*)")
         match (.exec re str)]
     (if match
       (let [page (js/parseInt (aget match 1))
@@ -404,6 +404,7 @@
 (defn pdf-to-elem [elem zoom loc]
   (let [{:keys [h v W H Page]} loc
         img (nth (dom/children elem) (- Page 1))]
+    (if (or (not img) (= (.-id img) "sync-box")) (throw (str "Error: could not find image for page " Page)))
     {:h (+ (* h zoom) (.-offsetLeft img) 2)  ;; 2 for border, since offset*
      :v (+ (* v zoom) (.-offsetTop img) 2)   ;; measures to outside of border
      :W (* W zoom)
