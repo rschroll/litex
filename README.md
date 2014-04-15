@@ -22,7 +22,7 @@ everything loaded properly.
 
 You'll need TeX installed, of course.  For the PDF viewer, you also need
 the command-line programs `pdftoppm` and `pdfinfo`, part of [Poppler][3]
-or [Xpdf][4].  Linux users should find this in their repositories, if
+or [Xpdf][4].  Linux users should find these in their repositories, if
 they aren't already installed.  (On Debian-based systems, they're in the
 *poppler-utils* package.)  A version for Windows is available on the
 [Xpdf download page][5].  The Mac package linked to on that page does
@@ -55,7 +55,7 @@ settings.  By default it's set to `null`, in which case the name of the
 current file is used, if it's a TeX file, or the name of the most
 recently compiled file.  It can be a relative filename, in which case it
 is resolved relative to the directory containing the current file, or an
-absolute filename.  You probably only need this is you're working on a
+absolute filename.  You probably only need this if you're working on a
 project with several TeX files.
 
 * *commands*: The commands to run.  Either
@@ -99,7 +99,7 @@ the PDF viewer will open *chatper1.pdf*.  When you press
 editing *refs.bib*, you can still build *main.pdf* with
 `Ctrl`-`Shift`-`Enter`.
 
-Make sure that no commands will stop and wait for input is there is a
+Make sure that no commands will stop and wait for input if there is a
 problem, as LiTeX doesn't offer a way to enter input.  Practically, this
 means you should call `latex` with the `-halt-on-error` option.
 
