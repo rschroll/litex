@@ -117,9 +117,9 @@
    "project" {"filename" nil "commands" "pdflatex" "outputname" "%b.pdf"}})
 
 (def COMMANDS
-  {"pdflatex" ["pdflatex -halt-on-error --synctex=1 \"%f\""]
-   "latex-dvipdf" ["latex -halt-on-error --synctex=1 \"%f\"" "dvipdf \"%b\""]
-   "latex-dvips-ps2pdf" ["latex -halt-on-error --synctex=1 \"%f\"" "dvips \"%b\"" "ps2pdf \"%b.ps\""]})
+  {"pdflatex" ["pdflatex -interaction=nonstopmode -halt-on-error -file-line-error --synctex=1 \"%f\""]
+   "latex-dvipdf" ["latex -interaction=nonstopmode -halt-on-error -file-line-error --synctex=1 \"%f\"" "dvipdf \"%b\""]
+   "latex-dvips-ps2pdf" ["latex -interaction=nonstopmode -halt-on-error -file-line-error --synctex=1 \"%f\"" "dvips \"%b\"" "ps2pdf \"%b.ps\""]})
 
 (def SETTINGS_TEMPLATE
 "// This document is in JSON format.  Note that there must be a comma
