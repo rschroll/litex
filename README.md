@@ -101,7 +101,8 @@ editing *refs.bib*, you can still build *main.pdf* with
 
 Make sure that no commands will stop and wait for input if there is a
 problem, as LiTeX doesn't offer a way to enter input.  Practically, this
-means you should call `latex` with the `-interaction=nonstopmode` or `-interaction=batchmode` options.
+means you should call `latex` with the `-interaction=nonstopmode` or
+`-interaction=batchmode` options.
 
 All commands are run from the directory containing *filename*.  If
 you're doing something that requires commands run in several different
