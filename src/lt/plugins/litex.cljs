@@ -18,8 +18,7 @@
   (_exec command (js-obj "cwd" cwd
                          "encoding" encoding
                          "env" (proc/merge-env nil)
-                         "maxBuffer" (* 1024 1024)
-                         "windowsVerbatimArguments" (when (= js/process.platform "win32") true))
+                         "maxBuffer" (* 1024 1024))
          exitfunc))
 
 (defn kwpair [str]
