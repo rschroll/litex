@@ -329,8 +329,8 @@
           :triggers #{:editor.eval.tex!}
           :reaction (fn [this msg]
                       (let [data (:data msg)
-                            log-viewer (dom/$ :pre#log-viewer (object/->content this))
-                            viewer (:frame @this)]
+                            viewer (:frame @this)
+                            log-viewer (dom/$ :pre#log-viewer (object/->content viewer))]
                         (if-not (:error data)
                           (do
                             (object/raise viewer :set-pdf (:pdfname data))
@@ -351,8 +351,8 @@
                         (if (:laying-out @viewer)
                           (object/merge! viewer {:sync-msg msg})
                           (let [data (:data msg)
-                                pdf-viewer (dom/$ :div#pdf-viewer (object/->content this))
-                                sync-box (dom/$ :div#sync-box (object/->content this))
+                                pdf-viewer (dom/$ :div#pdf-viewer (object/->content viewer))
+                                sync-box (dom/$ :div#sync-box (object/->content viewer))
                                 output-split (and (:stdout data) (rest (.split (:stdout data) "\nOutput")))
                                 restore-top (:restore-top @viewer)
                                 restore-left (:restore-left @viewer)]
