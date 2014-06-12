@@ -1,0 +1,2 @@
+{:+ {:editor.keys.normal.latex {"$" [(:editor.repeat-pair "$")]
+                                "\"" [:litex-double-quote]}}}
