@@ -1,5 +1,5 @@
 ;; Copyright 2013 Kodowa Inc and 2014 Robert Schroll
-;; This file is part of LiTeX ad is distributed under the terms of the GPLv3.
+;; This file is part of LiTeX and is distributed under the terms of the GPLv3.
 ;; This file derives from src/lt/objs/browser.cljs in Light Table.
 
 (ns lt.plugins.litex.viewer

@@ -1,5 +1,5 @@
 ;; Copyright 2014 Robert Schroll
-;; This file is part of LiTeX ad is distributed under the terms of the GPLv3.
+;; This file is part of LiTeX and is distributed under the terms of the GPLv3.
 
 (ns lt.plugins.litex.keys
   (:require [lt.object :as object]
