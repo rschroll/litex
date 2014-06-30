@@ -1,2 +1,6 @@
 {:+ {:editor.keys.normal.latex {"$" [(:editor.repeat-pair "$")]
-                                "\"" [:litex-double-quote]}}}
+                                "\"" [:litex-double-quote]
+                                "(" [(:litex-open-delim "(")]
+                                ")" [(:litex-close-delim ")")]
+                                "[" [(:litex-open-delim "[")]
+                                "]" [(:litex-close-delim "]")]}}}

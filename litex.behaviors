@@ -2,7 +2,8 @@
            (:lt.objs.plugins/load-css "css/litex-viewer.css")
            (:lt.objs.plugins/load-keymap "litex.keymap")]
      :editor.latex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward :lt.plugins.litex/edit-settings
-                    :lt.plugins.litex.keys/double-quote (:lt.object/add-tag :editor.keys.normal.latex)]
+                    :lt.plugins.litex.keys/double-quote :lt.plugins.litex.keys/open-delim :lt.plugins.litex.keys/close-delim
+                    (:lt.object/add-tag :editor.keys.normal.latex)]
      :editor.bibtex [:lt.plugins.litex/on-eval :lt.plugins.litex/on-eval.one :lt.plugins.litex/sync-forward :lt.plugins.litex/edit-settings]
      :files [(:lt.objs.files/file-types [{:name "BibTeX" :exts [:bib] :mime "application/x-bibtex" :tags [:editor.bibtex]}])]
      :latex.lang [:lt.plugins.litex/eval!]
