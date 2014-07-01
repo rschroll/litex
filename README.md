@@ -20,13 +20,13 @@ clone this repository into your plugins folder:
 You may need to reload your behaviors or restart Light Table to get
 everything loaded properly.
 
-You'll need TeX installed, of course.  For the PDF viewer, you also need
-the command-line programs `pdftoppm` and `pdfinfo`, part of
+You'll need TeX installed, of course.  For the internal PDF viewer, you
+also need the command-line programs `pdftoppm` and `pdfinfo`, part of
 [Poppler][3].  Linux users should find these in their repositories, if
 they aren't already installed.  (On Debian-based systems, they're in the
 *poppler-utils* package.)  On Macs, Poppler can be installed with `brew
-install poppler.  For Windows, I've found [these][4] [two][5] sources,
-but I can't attest that they work.
+install poppler`.  For Windows, I've found a build at [alivate.com][4]
+to work.
 
 [3]: http://poppler.freedesktop.org/
 [4]: http://blog.alivate.com.au/poppler-windows/
