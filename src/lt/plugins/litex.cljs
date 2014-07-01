@@ -91,6 +91,15 @@
     (object/merge! editor {:pdfname pdfname})
     (run-commands commands cwd exitfunc)))
 
+(defn run-commands-to-console [connection-command editor commands cwd pdfname render?]
+  (let [exitfunc (fn [error stdout stderr]
+                   (if error
+                     (js/console.log (str "Error running " connection-command ":\n" stdout stderr))
+                     (if (= connection-command :editor.eval.tex)
+                       (object/raise editor :sync-forward))))]
+    (object/merge! editor {:pdfname pdfname})
+    (run-commands commands cwd exitfunc)))
+
 (defn load-settings [path]
   (let [file (files/open-sync path)
         content (:content file)]
@@ -110,6 +119,11 @@
   (apply merge (map #(get % which) [DEFAULT_SETTINGS
                                     (load-settings (global-settings))
                                     (load-settings (local-settings cwd))])))
+
+(defn get-viewer-command [cwd]
+  (some identity [(get (load-settings (local-settings cwd)) "PDF-viewer")
+                  (get (load-settings (global-settings)) "PDF-viewer")
+                  "internal"]))
 
 (def DEFAULT_SETTINGS
   {"file" {"filename" nil "commands" "pdflatex" "outputname" "%b.pdf"}
@@ -153,6 +167,11 @@
   \"project\": {
     // The same settings as for \"file\".
   }
+  // The \"PDF-viewer\" setting gives the command to be run to display
+  // the PDF file.  Either \"internal\" to use the internal viewer, or a
+  // command to launch an external program.  Substitution patterns may
+  // be used.  Set to the empty string to turn of the viewer.
+  //\"PDF-viewer\": \"internal\"
 }
 
 // Pattern | Substitution value
@@ -163,6 +182,9 @@
 //    %b   | base name, without file extension
 //    %e   | file extension
 //    %%   | a percent sign
+//    %o   | name of PDF file      ]
+//    %l   | current line number   ] Only PDF-viewer
+//    %c   | current column number ]
 ")
 
 (behavior ::on-eval
@@ -182,13 +204,16 @@
           :reaction (fn [this which editor]
                       (when-let [{:keys [commands cwd texname pdfname]} (get-config-from-settings (-> @editor :info :path) which)]
                         (object/merge! tex-lang {:last-tex-file texname})
-                        (run-commands-to-client :editor.eval.tex editor commands cwd pdfname false))))
+                        (let [runner (if (= (get-viewer-command cwd) "internal") run-commands-to-client run-commands-to-console)]
+                          (runner :editor.eval.tex editor commands cwd pdfname false)))))
 
 (behavior ::sync-forward
           :triggers #{:sync-forward}
           :reaction (fn [editor]
                       (let [pos (ed/->cursor editor)
-                            filename (files/basename (-> @editor :info :path))
+                            path (-> @editor :info :path)
+                            filename (files/basename path)
+                            cwd (files/parent path)
                             pdfname (some #(let [name (:pdfname (%))]
                                              (if (files/exists? name) name nil))
                                           ;; This silliness is to avoid running get-config-from-settings
@@ -197,10 +222,22 @@
                                            #(get-config-from-settings (-> @editor :info :path) "file")
                                            #(get-config-from-settings (-> @editor :info :path) "project")])]
                         (if pdfname
-                          (run-commands-to-client :litex.forward-sync editor
-                                                  [(str "synctex view -i \"" (+ (:line pos) 1) ":" (+ (:ch pos) 1) ":"
-                                                        filename "\" -o \"" (files/basename pdfname) "\"")]
-                                                  (files/parent pdfname) pdfname true)
+                          (let [sync-command (get-viewer-command cwd)
+                                runner (if (= sync-command "internal") run-commands-to-client run-commands-to-console)
+                                sync-command (if (= sync-command "internal")
+                                               "synctex view -i \"%l:%c:%f\" -o \"%o\""
+                                               sync-command)
+                                sync-command (clojure/string.replace sync-command #"%[fpbdeolc%]"
+                                                                     #((keyword %1) {:%f filename
+                                                                                     :%p path
+                                                                                     :%b (files/without-ext filename)
+                                                                                     :%d cwd
+                                                                                     :%e (files/ext filename)
+                                                                                     :%o pdfname
+                                                                                     :%l (+ 1 (:line pos))
+                                                                                     :%c (+ 1 (:ch pos))
+                                                                                     :%% "%"}))]
+                            (runner :litex.forward-sync editor [sync-command] (files/parent pdfname) pdfname true))
                           (js/console.log "Don't know the name of the PDF file this compiles to.  (Try compiling.)")))))
 
 (behavior ::sync-backward

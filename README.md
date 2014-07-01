@@ -112,6 +112,25 @@ you should be all set.
 [6]: http://users.phys.psu.edu/~collins/software/latexmk-jcc/
 [7]: https://launchpad.net/rubber/
 
+External Viewers
+----------------
+LiTeX can use external PDF viewers in place of the internal one.  The
+*litexrc* files also have a `"PDF-viewer"` attribute.  Set to
+`"internal"`, it uses the built-in viewer.  Set it to a command to
+launch the PDF viewer of your choice.  In addition to those above, the
+following substitution patterns may be used:
+
+Pattern | Substitution value
+:------:|:------------------
+  `%o`  | name of PDF file
+  `%l`  | current line number
+  `%c`  | current column number
+
+The internal viewer contains a log viewer for reviewing the output of
+the compilation commands.  When using an external viewer, this output is
+written to the Light Table console only when there is an error during
+compilation.
+
 License
 -------
 LiTeX is copyright 2014 Robert Schroll and others, released under
