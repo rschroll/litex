@@ -59,6 +59,7 @@
   position: absolute;
   border: 3px solid blue;
   opacity: 1;
+  pointer-events: none;
 }
 #sync-box.animate {
   transition-property: opacity;
