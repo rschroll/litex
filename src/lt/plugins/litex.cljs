@@ -225,7 +225,7 @@
                           (let [sync-command (get-viewer-command cwd)
                                 runner (if (= sync-command "internal") run-commands-to-client run-commands-to-console)
                                 sync-command (if (= sync-command "internal")
-                                               "synctex view -i \"%l:%c:%f\" -o \"%o\""
+                                               "synctex view -i \"%l:%c:%p\" -o \"%o\""
                                                sync-command)
                                 sync-command (clojure/string.replace sync-command #"%[fpbdeolc%]"
                                                                      #((keyword %1) {:%f filename
