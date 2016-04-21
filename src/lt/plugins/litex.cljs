@@ -101,13 +101,14 @@
     (run-commands commands cwd exitfunc)))
 
 (defn load-settings [path]
-  (let [file (files/open-sync path)
-        content (:content file)]
-    (if content
-      (try
-        (js->clj (js/JSON.parse (.replace content (js/RegExp. "^\\s*//.*$" "gm") "")))
-        (catch js/Error e
-          (js/console.log (str "Error parsing " path ":\n  " e "\nIgnoring this file.")))))))
+  (if (files/file? path)
+    (let [file (files/open-sync path)
+          content (:content file)]
+      (if content
+        (try
+          (js->clj (js/JSON.parse (.replace content (js/RegExp. "^\\s*//.*$" "gm") "")))
+          (catch js/Error e
+            (js/console.log (str "Error parsing " path ":\n  " e "\nIgnoring this file."))))))))
 
 (defn global-settings []
   (files/join (files/parent files/data-path) "litexrc"))
